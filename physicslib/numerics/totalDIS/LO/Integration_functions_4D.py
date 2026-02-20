@@ -7,6 +7,7 @@ directly on top of `LODISIntegrand4D` from
 """
 
 import multiprocessing
+import os
 
 import numpy as np
 import vegas
@@ -105,22 +106,51 @@ class LODIS4D_VegasIntegrand:
     VEGAS-ready wrapper around LODISIntegrand4D.FE_integrand.
     """
 
-    def __init__(self, Msq, lodis4d, flavor: int = 0):
+    def __init__(self, Q, Msq, lodis4d, flavor: int = 0):
+        self.Q = Q
         self.Msq = Msq
         self.integrand = lodis4d
         self.flavor = flavor
-
     def __call__(self, x):
-        u, up, z, theta = x
-        # Q is stored inside the photon wavefunction via construction.
-        # We pass it explicitly to keep the API clear.
-        Q = self.integrand.wf.Q if hasattr(self.integrand.wf, "Q") else None
-        # In this codebase, Q is a parameter to the FE_integrand, so we
-        # keep it as an explicit argument in the run function below.
-        raise RuntimeError(
-            "LODIS4D_VegasIntegrand should not be called directly. "
-            "Use `run_vegas_integral_4D` which binds Q explicitly."
-        )
+        """
+        Batched/vectorized integrand for VEGAS.
+
+        Accepts either a single point of shape (4,) and returns a scalar,
+        or a batch of points of shape (N,4) and returns a 1D array of length N.
+        This delegates to the existing `LODISIntegrand4D.FE_integrand`, which
+        is written with numpy/scipy and therefore supports array inputs.
+        """
+        arr = np.asarray(x)
+
+        # Normalize input to shape (N,4) where last axis are coordinates
+        if arr.ndim == 1:
+            if arr.size != 4:
+                raise ValueError(f"Expected 4 coordinates, got shape {arr.shape}")
+            # single point -> pass scalars through
+            u, up, z, theta = arr
+            Q = getattr(self.integrand.wf, "Q", None)
+            return self.integrand.FE_integrand(Q, self.Msq, u, up, z, theta, flavor=self.flavor)
+
+        # If last axis is 4, good: shape (N,4)
+        if arr.shape[-1] == 4:
+            batch = arr.reshape(-1, 4)
+        # If first axis is 4, assume shape (4,N) and transpose
+        elif arr.shape[0] == 4:
+            batch = arr.T.reshape(-1, 4)
+        else:
+            # Try to coerce into (-1,4)
+            try:
+                batch = arr.reshape(-1, 4)
+            except Exception:
+                raise ValueError(f"Cannot interpret VEGAS batch shape {arr.shape} as points of length 4")
+
+        u = batch[:, 0]
+        up = batch[:, 1]
+        z = batch[:, 2]
+        theta = batch[:, 3]
+
+        # FE_integrand expects Q explicitly; use the stored Q from construction.
+        return self.integrand.FE_integrand(self.Q, self.Msq, u, up, z, theta, flavor=self.flavor)
 
 class WrappedLODIS4DIntegrand:
     def __init__(self, lodis4d, Q, Msq):
@@ -189,30 +219,48 @@ def run_vegas_integral_4D(
     (mean, error) : tuple of floats
         VEGAS estimate and its standard deviation.
     """
+    # Determine number of CPU cores to use. Prefer SLURM setting when present,
+    # otherwise use all local CPUs. Allow override via n_cores argument.
     if n_cores is None:
-        n_cores = multiprocessing.cpu_count()
+        n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
+
+    # VEGAS tuning via environment variables for quick experiments
+    warm_nitn = int(os.environ.get("VEGAS_WARM_NITN", "5"))
+    full_nitn = int(os.environ.get("VEGAS_FULL_NITN", "10"))
+    min_neval_batch = int(os.environ.get("VEGAS_MIN_NEVAL_BATCH", "50000"))
 
     lodis4d = _build_lodis4d(Q, m, Zf, polarization=polarization, largeNc=largeNc, z_target_override=z_target_override)
 
     # Kinematic invariant (upper limit on the invariant mass squared)
     Msq = Q**2 * (1.0 / xB - 1.0)
 
-    wrapped_integrand = WrappedLODIS4DIntegrand(lodis4d, Q, Msq)
+    # Use the batched/vectorized integrand that delegates to FE_integrand
+    batched_integrand = LODIS4D_VegasIntegrand(Q, Msq, lodis4d, flavor=0)
 
+    # Choose a sensible number of worker processes so that each worker receives
+    # reasonably large batches (avoids high IPC/process overhead).
+    sensible_nproc = min(n_cores, max(1, int(mcpoints // min_neval_batch)))
 
     integ = vegas.Integrator(
         [[umin, umax], [upmin, upmax], [zmin, zmax], [thetamin, thetamax]],
-        nproc=n_cores,
+        nproc=sensible_nproc,
     )
 
-    warm = dict(nitn=10, neval=mcpoints // 10, min_neval_batch=10_000)
-    full = dict(nitn=20, neval=mcpoints, min_neval_batch=10_000)
+    neval_warm = max(int(mcpoints // 10), min_neval_batch)
+    warm = dict(nitn=warm_nitn, neval=neval_warm, min_neval_batch=min_neval_batch)
+    full = dict(nitn=full_nitn, neval=int(mcpoints), min_neval_batch=min_neval_batch)
+
+    # Helpful runtime info for tuning
+    print(
+        f"[VEGAS] n_cores={n_cores}, nproc={sensible_nproc}, mcpoints={mcpoints}, "
+        f"warm_nitn={warm_nitn}, full_nitn={full_nitn}, min_neval_batch={min_neval_batch}"
+    )
 
     # Warm-up adaptation
-    integ(wrapped_integrand, **warm)
+    integ(batched_integrand, **warm)
 
     # Full integration
-    result = integ(wrapped_integrand, **full)
+    result = integ(batched_integrand, **full)
 
     return result.mean, result.sdev
 

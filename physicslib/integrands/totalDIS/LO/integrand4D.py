@@ -37,18 +37,27 @@ class LODISIntegrand4D:
         leaving a 4D integral over (u, up, z, theta).
         """
         mf = self.mf[flavor]
+        # Vectorize support: u, up, z, theta may be scalars or arrays. Use
+        # numpy broadcasting so this function can return an array of values
+        # when called with vector inputs.
+        u_a, up_a, z_a, theta_a = np.broadcast_arrays(u, up, z, theta)
 
-        arg = Msq_max * z * (1 - z) - mf**2
-        if arg <= 0:
-            return 0.0
+        arg = Msq_max * z_a * (1.0 - z_a) - mf ** 2
+        r2 = u_a ** 2 + up_a ** 2 - 2.0 * u_a * up_a * np.cos(theta_a)
 
-        r2 = u**2 + up**2 - 2 * u * up * np.cos(theta)
-        if r2 <= 0:
-            return 0.0
+        valid = (arg > 0) & (r2 > 0)
 
-        zeta = np.sqrt(arg * r2)
-        # J1 Bessel kernel for the k-integral
-        return zeta * jv(1, zeta) / (2 * np.pi * r2)
+        I_P = np.zeros_like(arg, dtype=float)
+        if np.any(valid):
+            zeta = np.sqrt(arg[valid] * r2[valid])
+            # J1 Bessel kernel for the k-integral (scipy.special.jv supports arrays)
+            I_P_valid = zeta * jv(1, zeta) / (2.0 * np.pi * r2[valid])
+            I_P[valid] = I_P_valid
+
+        # If inputs were scalars, return a scalar
+        if I_P.shape == ():
+            return float(I_P)
+        return I_P
 
     def FE_integrand(self, Q, Msq_max, u, up, z, theta, flavor=0):
         """

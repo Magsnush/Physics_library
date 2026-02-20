@@ -24,14 +24,17 @@ import numpy as np
 
 from Integration_functions_4D import compute_cross_section_4D
 
+import time
+
+
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    if len(argv) < 9:
+    if len(argv) < 8:
         raise SystemExit(
-            "Usage: LO_4D_integration_script.py Q xB mcpoints r_max m Zf pol largeNc"
+            "Usage: LO_4D_integration_script.py Q xB mcpoints r_max m Zf largeNc zlimit"
         )
 
     Q = float(argv[1])
@@ -40,19 +43,19 @@ def main(argv=None):
     r_max = float(argv[4])
     m = float(argv[5])
     Zf = float(argv[6])
-    pol = argv[7]
-    largeNc = bool(int(argv[8]))
+    largeNc = bool(int(argv[7]))
     
     # Optional z→0 limit flag
-    if len(argv) > 9:
-        zlimit = bool(int(argv[9]))
+    if len(argv) > 8:
+        zlimit = bool(int(argv[8]))
     else:
         zlimit = False
 
 
+    start = time.perf_counter()
 
     # An example of the command line arguments would be:
-    # python LO_4D_integration_script.py 10 0.01 1e4 10 0.14 0.667 T 0 0
+    # python LO_4D_integration_script.py 10 0.01 1e4 10 0.14 0.667 0 0
     # where the last argument 0 is the flag for no z->0 limit and 1 is the flag for z->0 limit
 
 
@@ -71,7 +74,7 @@ def main(argv=None):
         xB=xB,
         m=m,
         Zf=Zf,
-        polarization=pol,
+        polarization="L",
         largeNc=largeNc,
         umin=umin,
         umax=umax,
@@ -99,7 +102,7 @@ def main(argv=None):
         xB=xB,
         m=m,
         Zf=Zf,
-        polarization=pol,
+        polarization="T",
         largeNc=largeNc,
         umin=umin,
         umax=umax,
@@ -126,6 +129,12 @@ def main(argv=None):
 
     print("Q2, xB, m, largeNc, zlimit, FL, FL_err, FT, FT_err, F2, F2_err")
     print(f"{Q**2}, {xB}, {m}, {int(largeNc)}, {int(zlimit)}, {FL}, {FL_err}, {FT}, {FT_err}, {F2}, {F2_err}")
+
+
+    end = time.perf_counter()
+
+    print(f"Integration took {end - start:.2f} seconds")
+
 
 
 if __name__ == "__main__":
