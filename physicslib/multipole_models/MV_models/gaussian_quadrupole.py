@@ -20,7 +20,9 @@ class GaussianQuadrupole:
         x1p = np.array(x1p)               # <---- THIS IS OK
         x2p = np.array(x2p)
 
-        f = self.dipole.exponent
+        # Make f a callable that returns the dipole exponent (log S_xy)
+        # S_xy is a method on the Dipole class, so call it with (x,y)
+        f = lambda a, b: np.log(self.dipole.S_xy(a, b))
         
         # Functions that appear in quadrupole in terms of dipole exponential
         def F(x1,x2,x2p,x1p):
@@ -68,7 +70,9 @@ class GaussianQuadrupole:
         x1p = np.array(x1p)               # <---- THIS IS OK
         x2p = np.array(x2p)
 
-        f = self.dipole.exponent
+        # Make f a callable that returns the dipole exponent (log S_xy)
+        # S_xy is a method on the Dipole class, so call it with (x,y)
+        f = lambda a, b: np.log(self.dipole.S_xy(a, b))
         
         # Functions that appear in quadrupole in terms of dipole exponential
         def F(x1,x2,x2p,x1p):

@@ -21,31 +21,30 @@ class Dipole:
             return abs(diff)
         return np.linalg.norm(diff, axis=-1)
     
-    def exponent_r(self, r):
-        r = np.asarray(r) + self.eps
-        return -((r**2 * self.Qs0**2)**self.gamma) / 4 * np.log(
-            1/(r * self.LambdaQCD) + self.ec * np.e
-        )
-
-    def exponent(self, x, y):
-        """
-        Compute the exponent of the dipole.
-        """
-        r = self.radius(x, y) + self.eps
-        return -((r**2 * self.Qs0**2) ** self.gamma) / 4 * np.log(1 / (r * self.LambdaQCD) + self.ec * np.exp(1))
-    
     def S_r(self, r):
         """
         Radial dipole: S(r) with r = |x - y|
         """
-        return np.exp(self.exponent_r(r))
+        return np.exp(-((r**2 * self.Qs0**2)**self.gamma) / 4 * np.log(1/(r * self.LambdaQCD) + self.ec * np.exp(1)))
 
 
     def S_xy(self, x, y):
         """
         Return the dipole value: D(x,y) = exp(exponent(x,y))
         """
-        return np.exp(self.exponent(x, y))
+        r = self.radius(x, y) + self.eps
+        return np.exp(-((r**2 * self.Qs0**2) ** self.gamma) / 4 * np.log(1 / (r * self.LambdaQCD) + self.ec * np.exp(1)))
+    
+    def BK_evolved_S_xy(self, x, y, Y):
+        """
+        Placeholder for BK-evolved S(x,y) at rapidity Y.
+
+        In a full implementation, this would solve the BK equation to evolve
+        the dipole from its initial condition at Y=0 to the desired rapidity Y.
+        For now, it simply returns the unevolved S(x,y).
+        """
+
+        
 
     def S(self, r):
         """
