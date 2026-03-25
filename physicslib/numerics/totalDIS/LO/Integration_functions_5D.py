@@ -1,9 +1,9 @@
 """
-VEGAS integration utilities for the 4D finite-energy LO DIS integrand.
+VEGAS integration utilities for the 5D finite-energy LO DIS integrand.
 
 This module mirrors the older `Integration_functions.py` but is built
-directly on top of `LODISIntegrand4D` from
-`physicslib.integrands.totalDIS.LO.integrand4D`.
+directly on top of `LODISIntegrand5D` from
+`physicslib.integrands.totalDIS.LO.integrand5D`.
 """
 
 import multiprocessing
@@ -12,12 +12,33 @@ import os
 import numpy as np
 import vegas
 
-from physicslib.integrands.totalDIS.LO.integrand4D import LODISIntegrand4D
+from physicslib.integrands.totalDIS.LO.integrand5D import LODISIntegrand5D
 from physicslib.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
 from physicslib.multipole_models.MV_models.dipole import Dipole
 from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
 
 from typing import Optional
+
+
+class BKDipoleWrapper:
+    """Wrapper to make BK-evolved dipole pickleable for multiprocessing.
+    
+    This class wraps the original S_xy and S_r methods to inject BK provider
+    and rapidity, while being serializable for multiprocessing.
+    """
+    def __init__(self, original_method, bk_provider, bk_Y):
+        self.original_method = original_method
+        self.bk_provider = bk_provider
+        self.bk_Y = bk_Y
+    
+    def __call__(self, *args, **kwargs):
+        # Only inject bk and Y if not already present
+        if 'bk' not in kwargs:
+            kwargs['bk'] = self.bk_provider
+        if 'Y' not in kwargs:
+            kwargs['Y'] = self.bk_Y
+        return self.original_method(*args, **kwargs)
+
 
 # Defined a quadrupole model that can be used to wrap the quadrupole model and override the z-target if desired to test z->0 limit.
 class QuadrupolePolarWrapper:
@@ -39,16 +60,18 @@ class QuadrupolePolarWrapper:
         )
 
 
-def _build_lodis4d(
+def _build_lodis5d(
     Q,
     m,
     Zf,
     polarization: str = "T",
     largeNc: bool = False,
     z_target_override=None,
+    bk_provider=None,
+    bk_Y=None,
 ):
     """
-    Helper to construct a LODISIntegrand4D with standard parameters.
+    Helper to construct a LODISIntegrand5D with standard parameters.
 
     Parameters
     ----------
@@ -62,6 +85,11 @@ def _build_lodis4d(
         Photon polarization.
     largeNc : bool
         If True, use large-Nc quadrupole approximation.
+    bk_provider : RCBKData instance, optional
+        If provided, use BK-evolved dipole instead of analytic MV.
+        Must be an instance with S(Y, r) method (e.g., from rcbk_adapter).
+    bk_Y : float, optional
+        Rapidity for BK evaluation. Required if bk_provider is provided.
     """
     quark_masses = np.array([m])
     quark_charges = np.array([Zf])
@@ -77,19 +105,27 @@ def _build_lodis4d(
     ec = 1.0
     dipole_model = Dipole(Qs0=Qs0, gamma=gamma, ec=ec)
 
+    # If BK provider is supplied, wrap S_xy to use BK-evolved dipole
+    if bk_provider is not None:
+        if bk_Y is None:
+            raise ValueError("bk_Y (rapidity) required when using BK provider")
+        
+        # Use pickleable wrapper for multiprocessing
+        dipole_model.S_xy = BKDipoleWrapper(dipole_model.S_xy, bk_provider, bk_Y)
+        dipole_model.S_r = BKDipoleWrapper(dipole_model.S_r, bk_provider, bk_Y)
+
     quad_model = GaussianQuadrupole(dipole_model)
 
     # sigma0 as used in the rest of the project
     sigma0 = 2.57 * 2 * 18.81
 
     quadrupole_polar = QuadrupolePolarWrapper(
-    quad_model=quad_model,
-    largeNc=largeNc,
-    z_override=z_target_override,
-)
+        quad_model=quad_model,
+        largeNc=largeNc,
+        z_override=z_target_override,
+    )
 
-
-    return LODISIntegrand4D(
+    return LODISIntegrand5D(
         quark_masses=quark_masses,
         photon_wf=photon_wf,
         sigma0=sigma0,
@@ -101,15 +137,14 @@ def _build_lodis4d(
 
 
 @vegas.rbatchintegrand
-class LODIS4D_VegasIntegrand:
+class LODIS5D_VegasIntegrand:
     """
-    VEGAS-ready wrapper around LODISIntegrand4D.FE_integrand.
+    VEGAS-ready wrapper around LODISIntegrand5D.FE_integrand.
     """
 
-    def __init__(self, Q, Msq, lodis4d, flavor: int = 0):
+    def __init__(self, Q, lodis5d, flavor: int = 0):
         self.Q = Q
-        self.Msq = Msq
-        self.integrand = lodis4d
+        self.integrand = lodis5d
         self.flavor = flavor
     def __call__(self, x):
         """
@@ -122,25 +157,25 @@ class LODIS4D_VegasIntegrand:
         """
         arr = np.asarray(x)
 
-        # Normalize input to shape (N,4) where last axis are coordinates
+        # Normalize input to shape (N,5) where last axis are coordinates
         if arr.ndim == 1:
-            if arr.size != 4:
-                raise ValueError(f"Expected 4 coordinates, got shape {arr.shape}")
+            if arr.size != 5:
+                raise ValueError(f"Expected 5 coordinates, got shape {arr.shape}")
             # single point -> pass scalars through
-            u, up, z, theta = arr
+            u, up, z, theta, Msq_qq = arr
             Q = getattr(self.integrand.wf, "Q", None)
-            return self.integrand.FE_integrand(Q, self.Msq, u, up, z, theta, flavor=self.flavor)
+            return self.integrand.FE_integrand(Q, Msq_qq, u, up, z, theta, flavor=self.flavor)
 
-        # If last axis is 4, good: shape (N,4)
-        if arr.shape[-1] == 4:
-            batch = arr.reshape(-1, 4)
-        # If first axis is 4, assume shape (4,N) and transpose
-        elif arr.shape[0] == 4:
-            batch = arr.T.reshape(-1, 4)
+        # If last axis is 5, good: shape (N,5)
+        if arr.shape[-1] == 5:
+            batch = arr.reshape(-1, 5)
+        # If first axis is 5, assume shape (5,N) and transpose
+        elif arr.shape[0] == 5:
+            batch = arr.T.reshape(-1, 5)
         else:
             # Try to coerce into (-1,4)
             try:
-                batch = arr.reshape(-1, 4)
+                batch = arr.reshape(-1, 5)
             except Exception:
                 raise ValueError(f"Cannot interpret VEGAS batch shape {arr.shape} as points of length 4")
 
@@ -148,27 +183,26 @@ class LODIS4D_VegasIntegrand:
         up = batch[:, 1]
         z = batch[:, 2]
         theta = batch[:, 3]
+        Msq_qq = batch[:, 4]
 
         # FE_integrand expects Q explicitly; use the stored Q from construction.
-        return self.integrand.FE_integrand(self.Q, self.Msq, u, up, z, theta, flavor=self.flavor)
+        return self.integrand.FE_integrand(self.Q, Msq_qq, u, up, z, theta, flavor=self.flavor)
 
-class WrappedLODIS4DIntegrand:
-    def __init__(self, lodis4d, Q, Msq):
-        self.lodis4d = lodis4d
+class WrappedLODIS5DIntegrand:
+    def __init__(self, lodis5d, Q):
+        self.lodis5d = lodis5d
         self.Q = Q
-        self.Msq = Msq
 
     def __call__(self, x):
-        u, up, z, theta = x
-        return self.lodis4d.FE_integrand(
-            self.Q, self.Msq, u, up, z, theta, flavor=0
+        u, up, z, theta, Msq_qq = x
+        return self.lodis5d.FE_integrand(
+            self.Q, Msq_qq, u, up, z, theta, flavor=0
         )
 
 
 
-def run_vegas_integral_4D(
+def run_vegas_integral_5D(
     Q,
-    xB,
     m,
     Zf,
     polarization: str,
@@ -181,19 +215,21 @@ def run_vegas_integral_4D(
     zmax,
     thetamin,
     thetamax,
+    Msq_qqtilde_min,
+    Msq_qqtilde_max,
     mcpoints: int,
     n_cores: Optional[int] = None,
     z_target_override=None,
+    bk_provider=None,
+    bk_Y=None,
 ):
     """
-    Perform a 4D VEGAS integration of the finite-energy DIS integrand.
+    Perform a 5D VEGAS integration of the finite-energy DIS integrand.
 
     Parameters
     ----------
     Q : float
         Photon virtuality (GeV).
-    xB : float
-        Bjorken-x.
     m : float
         Quark mass (GeV), treated as a single flavor for now.
     Zf : float
@@ -208,10 +244,18 @@ def run_vegas_integral_4D(
         Integration bounds for z.
     thetamin, thetamax : float
         Integration bounds for theta (angle between u and up).
+    Msq_qq_min, Msq_qq_max : float
+        Integration bounds for invariant mass squared.
     mcpoints : int
         Monte Carlo points per iteration.
     n_cores : int or None
         Number of processes for VEGAS; if None, use all available cores.
+    z_target_override : float, optional
+        Override z value for testing z->0 limit.
+    bk_provider : RCBKData instance, optional
+        BK-evolved dipole provider. If provided, uses BK-evolved dipole.
+    bk_Y : float, optional
+        Rapidity for BK evaluation (required if bk_provider is provided).
 
     Returns
     -------
@@ -228,20 +272,24 @@ def run_vegas_integral_4D(
     full_nitn = int(os.environ.get("VEGAS_FULL_NITN", "20"))
     min_neval_batch = int(os.environ.get("VEGAS_MIN_NEVAL_BATCH", "50000"))
 
-    lodis4d = _build_lodis4d(Q, m, Zf, polarization=polarization, largeNc=largeNc, z_target_override=z_target_override)
-
-    # Kinematic invariant (upper limit on the invariant mass squared)
-    Msq = Q**2 * (1.0 / xB - 1.0)
+    lodis5d = _build_lodis5d(
+        Q, m, Zf, 
+        polarization=polarization, 
+        largeNc=largeNc, 
+        z_target_override=z_target_override,
+        bk_provider=bk_provider,
+        bk_Y=bk_Y,
+    )
 
     # Use the batched/vectorized integrand that delegates to FE_integrand
-    batched_integrand = LODIS4D_VegasIntegrand(Q, Msq, lodis4d, flavor=0)
+    batched_integrand = LODIS5D_VegasIntegrand(Q, lodis5d, flavor=0)
 
     # Choose a sensible number of worker processes so that each worker receives
     # reasonably large batches (avoids high IPC/process overhead).
     sensible_nproc = min(n_cores, max(1, int(mcpoints // min_neval_batch)))
 
     integ = vegas.Integrator(
-        [[umin, umax], [upmin, upmax], [zmin, zmax], [thetamin, thetamax]],
+        [[umin, umax], [upmin, upmax], [zmin, zmax], [thetamin, thetamax], [Msq_qqtilde_min, Msq_qqtilde_max]],
         nproc=sensible_nproc,
     )
 
@@ -261,12 +309,24 @@ def run_vegas_integral_4D(
     # Full integration
     result = integ(batched_integrand, **full)
 
-    return result.mean, result.sdev
+    # Extract mean and standard deviation from VEGAS result
+    # Vegas with nproc > 0 returns RAvg with .mean and .sdev attributes as floats
+    # But sometimes with array-like results, it returns RAvgArray instead
+    
+    if hasattr(result, '__len__') and len(result) > 0:
+        # It's an array result; extract first element
+        mean_val = result[0].mean
+        sdev_val = result[0].sdev
+    else:
+        # Scalar result
+        mean_val = result.mean
+        sdev_val = result.sdev
+    
+    return mean_val, sdev_val
 
 # To test z->0 limit, we can override the z-target by passing in a value for z_target_override. It should be a float value i.e 0.0
-def compute_cross_section_4D(
+def compute_cross_section_5D(
     Q,
-    xB,
     m,
     Zf,
     polarization: str,
@@ -279,17 +339,29 @@ def compute_cross_section_4D(
     zmax,
     thetamin,
     thetamax,
+    Msq_qqtilde_min,
+    Msq_qqtilde_max,
     mcpoints: int,
     n_cores: Optional[int] = None,
     z_target_override=None,
+    bk_provider=None,
+    bk_Y=None,
 ):
     """
-    Convenience wrapper that mirrors the API of the old
-    `compute_cross_section` but for the 4D FE integrand.
+    Convenience wrapper for 5D finite-energy DIS integration.
+    
+    Supports both analytic MV dipole and BK-evolved dipole.
+    
+    Parameters
+    ----------
+    ... (see run_vegas_integral_5D for details)
+    bk_provider : RCBKData instance, optional
+        BK-evolved dipole provider. If None, uses analytic MV dipole.
+    bk_Y : float, optional
+        Rapidity for BK evaluation (required if bk_provider is provided).
     """
-    return run_vegas_integral_4D(
+    return run_vegas_integral_5D(
         Q=Q,
-        xB=xB,
         m=m,
         Zf=Zf,
         polarization=polarization,
@@ -302,8 +374,11 @@ def compute_cross_section_4D(
         zmax=zmax,
         thetamin=thetamin,
         thetamax=thetamax,
+        Msq_qqtilde_min=Msq_qqtilde_min,
+        Msq_qqtilde_max=Msq_qqtilde_max,
         mcpoints=mcpoints,
         n_cores=n_cores,
         z_target_override=z_target_override,
+        bk_provider=bk_provider,
+        bk_Y=bk_Y,
     )
-

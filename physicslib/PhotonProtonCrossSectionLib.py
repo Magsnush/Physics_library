@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.special import kv, jv, hyp0f1  #Modified Bessel function of the second kind and hypergeometric function
-from ..WaveFunctions.WaveFunctions import OT_photon_proton_wave_function_sq, KC_photon_proton_wave_function_sq
-from ..TargetModels.Target_models_lib import dipole, quadrupole_uu, dipole_1d, WW_distribution, Dipole_distribution
+from .wavefunctions.WaveFunctions import OT_photon_proton_wave_function_sq, KC_photon_proton_wave_function_sq
+from .target_models.Target_models_lib import dipole, quadrupole_uu, dipole_1d, WW_distribution, Dipole_distribution
 
 
 ######### UNPOLARIZED LIGHTCONE WAVEFUNCTIONS #########

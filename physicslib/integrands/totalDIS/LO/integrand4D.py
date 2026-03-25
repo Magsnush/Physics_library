@@ -56,7 +56,7 @@ class LODISIntegrand4D:
 
         # If inputs were scalars, return a scalar
         if I_P.shape == ():
-            return float(I_P)
+            return float(I_P) 
         return I_P
 
     def FE_integrand(self, Q, Msq_max, u, up, z, theta, flavor=0):

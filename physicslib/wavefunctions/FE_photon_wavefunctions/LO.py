@@ -36,8 +36,7 @@ class LO_FE_PhotonWF_squared:
 
 
     #Here u and up are dipole radii for the amplitude and its conjugate respectively
-
-    def psi_T_squared(self, Q, u, up, z, theta, flavor): #theta si the angle between the vectors u and up
+    def psi_T_squared(self, Q, u, up, z, theta, flavor): #theta is the angle between the vectors u and up
 
         mf = self.mf[flavor]
         zf = self.Zf[flavor]
@@ -61,6 +60,7 @@ class LO_FE_PhotonWF_squared:
         term2 = mf**2 * K0_sq
 
         return Cf_T * z * (1-z) * (term1 + term2)
+    
     
     def psi_L_squared(self, Q, u, up, z, theta, flavor):
 
