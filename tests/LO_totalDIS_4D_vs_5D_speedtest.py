@@ -25,8 +25,8 @@ import numpy as np
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from physicslib.numerics.totalDIS.LO.Integration_functions_4D import compute_cross_section_4D
-from physicslib.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
+from small_x_physics.numerics.totalDIS.LO.Integration_functions_4D import compute_cross_section_4D
+from small_x_physics.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
 
 
 def run_speedtest(Q=10.0, mcpoints=int(1e6), r_max=10.0, m=0.14, Zf=0.8165):

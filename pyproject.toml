@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "physicslib"
+name = "small_x_physics"
 version = "0.1.0"
 description = "Reusable cross section physics building blocks"
 dependencies = [

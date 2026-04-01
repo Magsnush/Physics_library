@@ -1,5 +1,5 @@
-from physicslib.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
-from physicslib.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
+from small_x_physics.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
+from small_x_physics.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
 
 fe_wf = LO_FE_PhotonWF_squared(
     quark_masses=[0.14, 0.14, 0.14],

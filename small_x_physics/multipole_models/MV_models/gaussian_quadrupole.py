@@ -1,7 +1,7 @@
 ### Contains a gaussian approximation to the quadrupole in the MV model ###
 
 import numpy as np
-from physicslib.constants import Nc, LambdaQCD, CF
+from small_x_physics.constants import Nc, LambdaQCD, CF
 
 
 class GaussianQuadrupole:

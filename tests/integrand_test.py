@@ -11,11 +11,11 @@ import numpy as np
 import sys
 import importlib
 
-from physicslib.integrands.totalDIS.LO.integrand import LODISIntegrand
-from physicslib.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
-from physicslib.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
-from physicslib.multipole_models.MV_models.dipole import Dipole
-from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+from small_x_physics.integrands.totalDIS.LO.integrand import LODISIntegrand
+from small_x_physics.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
+from small_x_physics.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
+from small_x_physics.multipole_models.MV_models.dipole import Dipole
+from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
 
 
 def build_lodis_integrand(

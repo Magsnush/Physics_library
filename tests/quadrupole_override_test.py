@@ -18,7 +18,7 @@ import sys
 import numpy as np
 
 try:
-    from physicslib.numerics.totalDIS.LO.Integration_functions_4D import QuadrupolePolarWrapper
+    from small_x_physics.numerics.totalDIS.LO.Integration_functions_4D import QuadrupolePolarWrapper
 except Exception:
     # Fallback to local numerics LO path
     repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))

@@ -1,8 +1,8 @@
 from scipy.integrate import dblquad
 
-from physicslib.integrands.totalDIS.LO.OTintegrand import OTIntegrand
-from physicslib.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
-from physicslib.multipole_models.MV_models.dipole import Dipole
+from small_x_physics.integrands.totalDIS.LO.OTintegrand import OTIntegrand
+from small_x_physics.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
+from small_x_physics.multipole_models.MV_models.dipole import Dipole
 
 def OT_integral(Q, m, Zf, r_max, quark_masses, photon_wf, sigma0, dipole_model, polarization="T", flavor=0, z_min=1e-6, z_max=1.0-1e-6):
     """

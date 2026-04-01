@@ -20,9 +20,9 @@ Usage Examples
 
 2. Programmatic usage in your own code:
    
-   from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
-   from physicslib.multipole_models.MV_models.dipole import Dipole
-   from physicslib.multipole_models.MV_models.rcbk_adapter import RCBKData
+   from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+   from small_x_physics.multipole_models.MV_models.dipole import Dipole
+   from small_x_physics.multipole_models.MV_models.rcbk_adapter import RCBKData
    
    # Create analytic dipole
    dip = Dipole(Qs0=np.sqrt(0.104), gamma=1.0, ec=1.0)
@@ -50,9 +50,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 try:
-    from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
-    from physicslib.multipole_models.MV_models.dipole import Dipole
-    from physicslib.multipole_models.MV_models.rcbk_adapter import RCBKData
+    from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+    from small_x_physics.multipole_models.MV_models.dipole import Dipole
+    from small_x_physics.multipole_models.MV_models.rcbk_adapter import RCBKData
 except ModuleNotFoundError:
     # Try to add the local physicslib path (relative to this file)
     repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))

@@ -3,7 +3,7 @@ VEGAS integration utilities for the 4D finite-energy LO DIS integrand.
 
 This module mirrors the older `Integration_functions.py` but is built
 directly on top of `LODISIntegrand4D` from
-`physicslib.integrands.totalDIS.LO.integrand4D`.
+`small_x_physics.integrands.totalDIS.LO.integrand4D`.
 """
 
 import multiprocessing
@@ -12,10 +12,10 @@ import os
 import numpy as np
 import vegas
 
-from physicslib.integrands.totalDIS.LO.integrand4D import LODISIntegrand4D
-from physicslib.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
-from physicslib.multipole_models.MV_models.dipole import Dipole
-from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+from small_x_physics.integrands.totalDIS.LO.integrand4D import LODISIntegrand4D
+from small_x_physics.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
+from small_x_physics.multipole_models.MV_models.dipole import Dipole
+from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
 
 from typing import Optional
 

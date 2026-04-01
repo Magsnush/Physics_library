@@ -3,7 +3,7 @@ VEGAS integration utilities for the 5D finite-energy LO DIS integrand.
 
 This module mirrors the older `Integration_functions.py` but is built
 directly on top of `LODISIntegrand5D` from
-`physicslib.integrands.totalDIS.LO.integrand5D`.
+`small_x_physics.integrands.totalDIS.LO.integrand5D`.
 """
 
 import multiprocessing
@@ -12,10 +12,10 @@ import os
 import numpy as np
 import vegas
 
-from physicslib.integrands.totalDIS.LO.integrand5D import LODISIntegrand5D
-from physicslib.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
-from physicslib.multipole_models.MV_models.dipole import Dipole
-from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+from small_x_physics.integrands.totalDIS.LO.integrand5D import LODISIntegrand5D
+from small_x_physics.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
+from small_x_physics.multipole_models.MV_models.dipole import Dipole
+from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
 
 from typing import Optional
 
@@ -40,21 +40,21 @@ class BKDipoleWrapper:
         return self.original_method(*args, **kwargs)
 
 
-# Defined a quadrupole model that can be used to wrap the quadrupole model and override the z-target if desired to test z->0 limit.
+
+
 class QuadrupolePolarWrapper:
+    """Wraps quadrupole model and optionally overrides z-target for testing z→0 limit."""
     def __init__(self, quad_model, largeNc: bool, z_override=None):
         self.quad_model = quad_model
         self.largeNc = largeNc
         self.z_override = z_override
 
     def __call__(self, u, up, z, theta):
-
         z_for_target = (
             self.z_override
             if self.z_override is not None
             else z
         )
-
         return self.quad_model.quadrupole_polar(
             u, up, z_for_target, theta, largeNc=self.largeNc
         )
@@ -62,6 +62,7 @@ class QuadrupolePolarWrapper:
 
 def _build_lodis5d(
     Q,
+    xB,
     m,
     Zf,
     polarization: str = "T",
@@ -77,6 +78,9 @@ def _build_lodis5d(
     ----------
     Q : float
         Photon virtuality (GeV).
+    xB : float
+        Bjorken-x value. REQUIRED - enables z-dependent kinematic bounds on Msq_qq
+        to enforce physical constraint: Msq_qq <= W²·z·(1-z) where W² = Q²(1/xB - 1).
     m : float
         Quark mass (GeV). Currently treated as flavor-independent.
     Zf : float
@@ -99,24 +103,21 @@ def _build_lodis5d(
         quark_charges=quark_charges,
     )
 
-    # MV dipole parameters (taken to match the rest of the codebase)
+    # MV dipole parameters
     Qs0 = np.sqrt(0.104)
     gamma = 1.0
     ec = 1.0
     dipole_model = Dipole(Qs0=Qs0, gamma=gamma, ec=ec)
 
-    # If BK provider is supplied, wrap S_xy to use BK-evolved dipole
+    # Apply BK-evolved dipole if provider is supplied
     if bk_provider is not None:
         if bk_Y is None:
             raise ValueError("bk_Y (rapidity) required when using BK provider")
-        
-        # Use pickleable wrapper for multiprocessing
         dipole_model.S_xy = BKDipoleWrapper(dipole_model.S_xy, bk_provider, bk_Y)
         dipole_model.S_r = BKDipoleWrapper(dipole_model.S_r, bk_provider, bk_Y)
 
     quad_model = GaussianQuadrupole(dipole_model)
 
-    # sigma0 as used in the rest of the project
     sigma0 = 2.57 * 2 * 18.81
 
     quadrupole_polar = QuadrupolePolarWrapper(
@@ -125,7 +126,7 @@ def _build_lodis5d(
         z_override=z_target_override,
     )
 
-    return LODISIntegrand5D(
+    lodis_integrand = LODISIntegrand5D(
         quark_masses=quark_masses,
         photon_wf=photon_wf,
         sigma0=sigma0,
@@ -133,7 +134,11 @@ def _build_lodis5d(
         quadrupole_model=quadrupole_polar,
         polarization=polarization,
         largeNc=largeNc,
+        Q=Q,
+        xB=xB,
     )
+    
+    return lodis_integrand
 
 
 @vegas.rbatchintegrand
@@ -150,34 +155,27 @@ class LODIS5D_VegasIntegrand:
         """
         Batched/vectorized integrand for VEGAS.
 
-        Accepts either a single point of shape (4,) and returns a scalar,
-        or a batch of points of shape (N,4) and returns a 1D array of length N.
-        This delegates to the existing `LODISIntegrand4D.FE_integrand`, which
-        is written with numpy/scipy and therefore supports array inputs.
+        Accepts either a single point of shape (5,) and returns a scalar,
+        or a batch of points of shape (N,5) and returns a 1D array of length N.
         """
         arr = np.asarray(x)
 
-        # Normalize input to shape (N,5) where last axis are coordinates
         if arr.ndim == 1:
             if arr.size != 5:
                 raise ValueError(f"Expected 5 coordinates, got shape {arr.shape}")
-            # single point -> pass scalars through
             u, up, z, theta, Msq_qq = arr
             Q = getattr(self.integrand.wf, "Q", None)
             return self.integrand.FE_integrand(Q, Msq_qq, u, up, z, theta, flavor=self.flavor)
 
-        # If last axis is 5, good: shape (N,5)
         if arr.shape[-1] == 5:
             batch = arr.reshape(-1, 5)
-        # If first axis is 5, assume shape (5,N) and transpose
         elif arr.shape[0] == 5:
             batch = arr.T.reshape(-1, 5)
         else:
-            # Try to coerce into (-1,4)
             try:
                 batch = arr.reshape(-1, 5)
             except Exception:
-                raise ValueError(f"Cannot interpret VEGAS batch shape {arr.shape} as points of length 4")
+                raise ValueError(f"Cannot interpret VEGAS batch shape {arr.shape} as points of length 5")
 
         u = batch[:, 0]
         up = batch[:, 1]
@@ -185,7 +183,6 @@ class LODIS5D_VegasIntegrand:
         theta = batch[:, 3]
         Msq_qq = batch[:, 4]
 
-        # FE_integrand expects Q explicitly; use the stored Q from construction.
         return self.integrand.FE_integrand(self.Q, Msq_qq, u, up, z, theta, flavor=self.flavor)
 
 class WrappedLODIS5DIntegrand:
@@ -200,9 +197,9 @@ class WrappedLODIS5DIntegrand:
         )
 
 
-
 def run_vegas_integral_5D(
     Q,
+    xB,
     m,
     Zf,
     polarization: str,
@@ -224,12 +221,16 @@ def run_vegas_integral_5D(
     bk_Y=None,
 ):
     """
-    Perform a 5D VEGAS integration of the finite-energy DIS integrand.
+    Perform a 5D VEGAS integration of the finite-energy DIS integrand with kinematic bounds.
 
     Parameters
     ----------
     Q : float
         Photon virtuality (GeV).
+    xB : float
+        Bjorken-x value. REQUIRED - enables z-dependent kinematic bounds on Msq_qq.
+        The integrand enforces: Msq_qq <= W²·z·(1-z) where W² = Q²(1/xB - 1).
+        This constraint ensures physical consistency in the finite-energy formulation.
     m : float
         Quark mass (GeV), treated as a single flavor for now.
     Zf : float
@@ -262,18 +263,15 @@ def run_vegas_integral_5D(
     (mean, error) : tuple of floats
         VEGAS estimate and its standard deviation.
     """
-    # Determine number of CPU cores to use. Prefer SLURM setting when present,
-    # otherwise use all local CPUs. Allow override via n_cores argument.
     if n_cores is None:
         n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
 
-    # VEGAS tuning via environment variables for quick experiments
-    warm_nitn = int(os.environ.get("VEGAS_WARM_NITN", "10"))
-    full_nitn = int(os.environ.get("VEGAS_FULL_NITN", "20"))
+    warm_nitn = int(os.environ.get("VEGAS_WARM_NITN", "15"))
+    full_nitn = int(os.environ.get("VEGAS_FULL_NITN", "40"))
     min_neval_batch = int(os.environ.get("VEGAS_MIN_NEVAL_BATCH", "50000"))
 
     lodis5d = _build_lodis5d(
-        Q, m, Zf, 
+        Q, xB, m, Zf,
         polarization=polarization, 
         largeNc=largeNc, 
         z_target_override=z_target_override,
@@ -281,11 +279,8 @@ def run_vegas_integral_5D(
         bk_Y=bk_Y,
     )
 
-    # Use the batched/vectorized integrand that delegates to FE_integrand
     batched_integrand = LODIS5D_VegasIntegrand(Q, lodis5d, flavor=0)
 
-    # Choose a sensible number of worker processes so that each worker receives
-    # reasonably large batches (avoids high IPC/process overhead).
     sensible_nproc = min(n_cores, max(1, int(mcpoints // min_neval_batch)))
 
     integ = vegas.Integrator(
@@ -297,36 +292,22 @@ def run_vegas_integral_5D(
     warm = dict(nitn=warm_nitn, neval=neval_warm, min_neval_batch=min_neval_batch)
     full = dict(nitn=full_nitn, neval=int(mcpoints), min_neval_batch=min_neval_batch)
 
-    # Helpful runtime info for tuning
-    # print(
-    #     f"[VEGAS] n_cores={n_cores}, nproc={sensible_nproc}, mcpoints={mcpoints}, "
-    #     f"warm_nitn={warm_nitn}, full_nitn={full_nitn}, min_neval_batch={min_neval_batch}"
-    # )
-
-    # Warm-up adaptation
     integ(batched_integrand, **warm)
-
-    # Full integration
     result = integ(batched_integrand, **full)
 
-    # Extract mean and standard deviation from VEGAS result
-    # Vegas with nproc > 0 returns RAvg with .mean and .sdev attributes as floats
-    # But sometimes with array-like results, it returns RAvgArray instead
-    
     if hasattr(result, '__len__') and len(result) > 0:
-        # It's an array result; extract first element
         mean_val = result[0].mean
         sdev_val = result[0].sdev
     else:
-        # Scalar result
         mean_val = result.mean
         sdev_val = result.sdev
     
     return mean_val, sdev_val
 
-# To test z->0 limit, we can override the z-target by passing in a value for z_target_override. It should be a float value i.e 0.0
+
 def compute_cross_section_5D(
     Q,
+    xB,
     m,
     Zf,
     polarization: str,
@@ -348,20 +329,49 @@ def compute_cross_section_5D(
     bk_Y=None,
 ):
     """
-    Convenience wrapper for 5D finite-energy DIS integration.
+    Convenience wrapper for 5D finite-energy DIS integration with kinematic bounds.
     
     Supports both analytic MV dipole and BK-evolved dipole.
+    The z-dependent kinematic bounds on Msq_qq are ALWAYS enforced to ensure
+    physical consistency: Msq_qq <= W²·z·(1-z) where W² = Q²(1/xB - 1).
     
     Parameters
     ----------
-    ... (see run_vegas_integral_5D for details)
+    Q : float
+        Photon virtuality (GeV).
+    xB : float
+        Bjorken-x value. REQUIRED - enforces kinematic bounds on Msq_qq.
+    m : float
+        Quark mass (GeV).
+    Zf : float
+        Quark charge factor.
+    polarization : str
+        Photon polarization ("T", "L", or "TL").
+    largeNc : bool
+        Whether to use large-Nc approximation.
+    umin, umax, upmin, upmax, zmin, zmax, thetamin, thetamax : float
+        Integration bounds (see run_vegas_integral_5D).
+    Msq_qqtilde_min, Msq_qqtilde_max : float
+        Integration bounds for invariant mass squared.
+    mcpoints : int
+        Monte Carlo points per integration iteration.
+    n_cores : int, optional
+        Number of cores for VEGAS.
+    z_target_override : float, optional
+        Override z value for testing z->0 limit.
     bk_provider : RCBKData instance, optional
         BK-evolved dipole provider. If None, uses analytic MV dipole.
     bk_Y : float, optional
         Rapidity for BK evaluation (required if bk_provider is provided).
+
+    Returns
+    -------
+    (mean, error) : tuple of floats
+        Cross section estimate and its standard deviation.
     """
     return run_vegas_integral_5D(
         Q=Q,
+        xB=xB,
         m=m,
         Zf=Zf,
         polarization=polarization,

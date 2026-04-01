@@ -18,7 +18,7 @@ import numpy as np
 
 def test_analytic_dipole():
     """Test that analytic dipole works in 5D integration."""
-    from physicslib.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
+    from small_x_physics.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
     
     print("\n" + "="*70)
     print("TEST 1: Analytic Dipole in 5D Integration")
@@ -61,8 +61,8 @@ def test_analytic_dipole():
 
 def test_bk_dipole():
     """Test that BK-evolved dipole works in 5D integration."""
-    from physicslib.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
-    from physicslib.multipole_models.MV_models.rcbk_adapter import RCBKData
+    from small_x_physics.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
+    from small_x_physics.multipole_models.MV_models.rcbk_adapter import RCBKData
     
     print("\n" + "="*70)
     print("TEST 2: BK-Evolved Dipole in 5D Integration (Direct Parameter)")
@@ -123,9 +123,9 @@ def test_bk_dipole():
 
 def test_bk_dipole_manual_wrapping():
     """Test BK-evolved dipole using manual wrapping (like gaussian_quadrupole_a_test.py)."""
-    from physicslib.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
-    from physicslib.multipole_models.MV_models.rcbk_adapter import RCBKData
-    from physicslib.multipole_models.MV_models.dipole import Dipole
+    from small_x_physics.numerics.totalDIS.LO.Integration_functions_5D import compute_cross_section_5D
+    from small_x_physics.multipole_models.MV_models.rcbk_adapter import RCBKData
+    from small_x_physics.multipole_models.MV_models.dipole import Dipole
     
     print("\n" + "="*70)
     print("TEST 3: BK-Evolved Dipole in 5D Integration (Manual Wrapping)")

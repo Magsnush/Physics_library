@@ -29,7 +29,7 @@ import multiprocessing
 import numpy as np
 
 from Integration_functions_5D import compute_cross_section_5D
-from physicslib.multipole_models.MV_models.rcbk_adapter import RCBKData
+from small_x_physics.multipole_models.MV_models.rcbk_adapter import RCBKData
 
 import time
 

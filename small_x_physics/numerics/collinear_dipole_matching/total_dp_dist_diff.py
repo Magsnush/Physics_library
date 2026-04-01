@@ -11,7 +11,7 @@ import numpy as np
 try:
     from Integration_functions_4D import compute_cross_section_4D
 except Exception:
-    from physicslib.numerics.totalDIS.LO.Integration_functions_4D import compute_cross_section_4D
+    from small_x_physics.numerics.totalDIS.LO.Integration_functions_4D import compute_cross_section_4D
 
 
 def compute_F2(Q, xB, m, Zf, largeNc, r_max, mcpoints, n_cores=None, zlimit=False):

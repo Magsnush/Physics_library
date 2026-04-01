@@ -4,7 +4,7 @@ from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import jv
 
-from physicslib.constants import Nc
+from small_x_physics.constants import Nc
 
 # In the MV-model, we have (eq. (5) in https://arxiv.org/pdf/1101.0715)
 

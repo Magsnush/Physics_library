@@ -14,8 +14,8 @@ and plot Q_FNc(r) and Q_LNc(r) as functions of r.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from physicslib.multipole_models.MV_models.dipole import Dipole
-from physicslib.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
+from small_x_physics.multipole_models.MV_models.dipole import Dipole
+from small_x_physics.multipole_models.MV_models.gaussian_quadrupole import GaussianQuadrupole
 
 
 def build_quadrupole():

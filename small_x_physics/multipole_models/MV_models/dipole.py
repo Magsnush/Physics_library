@@ -1,7 +1,7 @@
 ### Contains dipole in the MV model ###
 
 import numpy as np
-from physicslib.constants import LambdaQCD
+from small_x_physics.constants import LambdaQCD
 
 
 class Dipole:

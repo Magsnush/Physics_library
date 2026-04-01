@@ -40,9 +40,9 @@ def main():
 
     # Local imports from package
     try:
-        from physicslib.numerics.totalDIS.LO.OTIntegration import OT_integral
-        from physicslib.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
-        from physicslib.multipole_models.MV_models.dipole import Dipole, BKEvolvedDipole
+        from small_x_physics.numerics.totalDIS.LO.OTIntegration import OT_integral
+        from small_x_physics.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
+        from small_x_physics.multipole_models.MV_models.dipole import Dipole, BKEvolvedDipole
     except Exception as e:
         print("Failed to import required modules from physicslib:", e)
         raise
@@ -93,7 +93,7 @@ def main():
     sigma0 = args.sigma0
 
     # Now compute differential contribution dSigma/dr = ∫ dz [OT_integrand(r, Q, z)]
-    from physicslib.integrands.totalDIS.LO.OTintegrand import OTIntegrand
+    from small_x_physics.integrands.totalDIS.LO.OTintegrand import OTIntegrand
     from scipy.integrate import quad
     import matplotlib.pyplot as plt
 
