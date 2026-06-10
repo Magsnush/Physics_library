@@ -1,5 +1,5 @@
 # Introduction:
-This is a python library for numerically computing different cross sections at small x. Currently the code can compute inclusive DIS cross sections at LO, using the optical theorem or using a finite energy constraint, and it can compute inclusive DIS cross sections with LO lightcone wavefunctions and a rcBK-evolved target amplitude.
+src/small_x_physics is a python library for numerically computing different cross sections at small x. Currently the code inside can compute inclusive DIS cross sections at LO, using the optical theorem or using a finite energy constraint, and it can compute inclusive DIS cross sections with LO lightcone wavefunctions and a rcBK-evolved target amplitude.
 
 # Description of the library:
 In the library there is one folder containing building blocks and one folder containing cross sections which are constructed from the building blocks. 
