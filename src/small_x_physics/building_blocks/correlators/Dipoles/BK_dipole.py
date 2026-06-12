@@ -61,9 +61,9 @@ class BKDipole:
     
     def BK_evolved_MV_model_S2_Y(self, x, y, Y, **_kwargs):
         """Evaluate the BK-evolved S2 for given transverse coordinates x and y at rapidity Y."""
-        r = self.radius(x, y)
+        r = np.clip(self.radius(x, y), 1e-6, 100.0)
 
-        N = self.N(r, Y)
+        N = self.N(r, np.clip(Y, 0, 16.0))
 
         return np.maximum(1.0 - N, 1e-14)
     
