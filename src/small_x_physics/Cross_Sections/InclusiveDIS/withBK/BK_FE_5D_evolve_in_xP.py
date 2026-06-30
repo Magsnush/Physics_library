@@ -34,6 +34,8 @@ class FE_CrossSection_BK_5D:
         self.x0 = x0
         self.mcpoints = mcpoints
         self.polarization = polarization
+        # self.Mqq_sq = None
+        # self.xP = None
 
         self.photon_wavefunction_squared = LO_FE_PhotonWF_squared(self.mf, self.Zf, Nc=Nc, alpha_em=alpha_em)
         self.BKdipole = BKDipole(self.bkfile)
@@ -47,11 +49,14 @@ class FE_CrossSection_BK_5D:
         z = x[2, :]
         theta = x[3, :]
         Mqq_sq = x[4, :]
+        # Mqq_sq = self.Mqq_sq
+        #xP = self.xP
 
         # Kinematics
         W2 = self.Q**2 * (1/self.xB - 1.0)
         xP = (Mqq_sq + self.Q**2) / (W2 + self.Q**2)
         Y = np.log(self.x0 / xP)
+        #Mqq_sq = xP * (W2 + self.Q**2) - self.Q**2
         
         # Photon wavefunction squared
         Long_wf_sq = self.photon_wavefunction_squared.psi_L_squared(self.Q, u, up, z, theta)
@@ -64,28 +69,28 @@ class FE_CrossSection_BK_5D:
         TargetAmp = 1 - BK_S2 - BK_S2_conj + IC_S4
 
         # Phase space integral
-        arg = z*(1-z)*Mqq_sq - self.mf**2
+        arg = z*(1-z) * Mqq_sq - self.mf**2
 
         r2 = u**2 + up**2 - 2*u*up*np.cos(theta)
 
-        valid = (arg > 0) & (r2 > 0)
-
         # Compute kinematic upper bound on Msq_qq
         Msq_min = self.mf**2 / (z*(1-z))
+        #xP_min = (Msq_min + self.Q**2) / (W2 + self.Q**2)
 
         # Enforce kinematic bounds: return 0 if outside physical region
-        valid = Msq_min <= Mqq_sq
+        valid = (Msq_min <= Mqq_sq) #& (arg > 0) & (r2 > 0)
+        #valid = (xP_min <= xP) & (arg > 0) & (r2 > 0)
 
         I_P = np.zeros_like(arg, dtype=float)
         if np.any(valid):
             zeta = np.sqrt(arg[valid] * r2[valid])
             # J0 Bessel kernel for the k-integral (scipy.special.jv supports arrays)
-            I_P_valid = z*(1-z)*jv(0, zeta) / (4.0 * np.pi)      # The factor of 1/4pi comes expressing the phase space integral in terms of the 0th order Bessel function.
+            I_P_valid = z[valid]*(1-z[valid])*jv(0, zeta) / (4.0 * np.pi)      # The factor of 1/4pi comes expressing the phase space integral in terms of the 0th order Bessel function.
             I_P[valid] = I_P_valid
-        
 
+        # In the paper the normalization factor and the factor 1/(z*(1-z)) has been absorbed into the definition of the wavefunction squared, but here we keep it explicit.
         NormFactor = 1/(4*np.pi)
-        Jac = ((u*up)/(z*(1-z))) * 2*np.pi
+        Jac = ((u*up)/(z*(1-z))) * 2*np.pi #* (W2 + self.Q**2)  # The factor of (W2 + Q^2) comes from the change of variables from Mqq_sq to xP .
 
         if self.polarization == "L":
             wf_sq = Long_wf_sq
@@ -128,86 +133,86 @@ class FE_CrossSection_BK_5D:
         return (
             result.mean,
             result.sdev,
-        )
+       )
     
+    # def dsigma_dMsq(self,
+    #     Mqq_sq,
+    #     r_min,
+    #     r_max,
+    #     z_min,
+    #     z_max,
+    #     theta_min,
+    #     theta_max,
+    # ):
 
-# Plot the unintegrated cross section as a function of Mqq_sq for some Q^2 and xB values.
-def plot_unintegrated_cross_section(Q, xB):
-    import matplotlib.pyplot as plt
-    mf = 0.14  # GeV
-    Zf = np.sqrt(2/3)
-    sigma0 = 2 * 2.57 * 18.81  # GeV
-    Qs0 = np.sqrt(0.104)    # GeV
-    gamma = 1.0
-    ec = 1.0
-    bkfile = "/home/ermabert/Academia/Research/Analysis/Project-1-Finite-energy-constraint-LO-dipole-picture-total-cross-section/Papers/Paper3_Inferrning_BK_IC__with_FEC/BK_data_files/mv.dat"
-    x0 = 0.01
-    mcpoints = 10000
+    #     self.Mqq_sq = Mqq_sq
+    #     n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
+    #     target_chunks_per_core = 4
+    #     batch_min = 1000
+    #     batch_max = 50000
+    #     raw_batch = int(self.mcpoints // (target_chunks_per_core * max(1, n_cores)))
+    #     min_neval_batch = max(batch_min, min(batch_max, raw_batch))
+        
 
-    cross_section_L = FE_CrossSection_BK_5D(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, "L")
-    cross_section_T = FE_CrossSection_BK_5D(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, "T")
+    #     sensible_nproc = min(n_cores, max(1, int(self.mcpoints // min_neval_batch)))
 
-    Mqq_sq_values = np.logspace(np.log10(mf**2/4), np.log10((Q**2  * (1/xB - 1))), 100)
-    F2_values = []
+    #     warm = dict(nitn=10, neval=int(self.mcpoints//10), min_neval_batch=min_neval_batch)
+    #     full = dict(nitn=20, neval=int(self.mcpoints), min_neval_batch=min_neval_batch)
 
-    u_values = [10.0]
-    up_values = [10.0]
-    z_values = [0.001, 0.5]
-    theta_values = [0, np.pi/6, np.pi/4, np.pi/2]
+    #     # setup VEGAS exactly as before, but only 4 dimensions
 
-    fig, axes = plt.subplots(3, 4, figsize=(16, 12), sharex=True, sharey=True)
+    #     integ = vegas.Integrator([
+    #         [r_min, r_max],
+    #         [r_min, r_max],
+    #         [z_min, z_max],
+    #         [theta_min, theta_max]]
+    #         ,nproc=sensible_nproc)
 
-    axes = axes.flatten()
+    #     integ(self, **warm)
+    #     result = integ(self, **full)
 
-    plot_idx = 0
+    #     return result.mean, result.sdev
+    
+    # def dsigma_dxP(self,
+    #     xP,
+    #     r_min,
+    #     r_max,
+    #     z_min,
+    #     z_max,
+    #     theta_min,
+    #     theta_max,
+    # ):
 
-    for u in u_values:
-        for up in up_values:
-            for z in z_values:
-                for theta in theta_values:
+    #     self.xP = xP
+    #     n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
+    #     target_chunks_per_core = 4
+    #     batch_min = 1000
+    #     batch_max = 50000
+    #     raw_batch = int(self.mcpoints // (target_chunks_per_core * max(1, n_cores)))
+    #     min_neval_batch = max(batch_min, min(batch_max, raw_batch))
+        
 
-                    F2_values = []
+    #     sensible_nproc = min(n_cores, max(1, int(self.mcpoints // min_neval_batch)))
 
-                    for Mqq_sq in Mqq_sq_values:
-                        x = np.array([[u], [up], [z], [theta], [Mqq_sq]])
+    #     warm = dict(nitn=10, neval=int(self.mcpoints//10), min_neval_batch=min_neval_batch)
+    #     full = dict(nitn=20, neval=int(self.mcpoints), min_neval_batch=min_neval_batch)
 
-                        F2_value = (
-                            Q**2 / (4 * np.pi**2 * alpha_em)
-                            * (cross_section_L(x) + cross_section_T(x))
-                        )
+    #     # setup VEGAS exactly as before, but only 4 dimensions
 
-                        F2_values.append(F2_value.item())
+    #     integ = vegas.Integrator([
+    #         [r_min, r_max],
+    #         [r_min, r_max],
+    #         [z_min, z_max],
+    #         [theta_min, theta_max]]
+    #         ,nproc=sensible_nproc)
 
-                    ax = axes[plot_idx]
+    #     integ(self, **warm)
+    #     result = integ(self, **full)
 
-                    ax.plot(Mqq_sq_values, F2_values)
-                    ax.set_xscale("log")
-
-                    ax.set_title(
-                        rf"$u={u}$, $u'={up}$" "\n"
-                        rf"$z={z}$, $\theta={theta:.2f}$",
-                        fontsize=10
-                    )
-
-                    ax.grid(True)
-
-                    plot_idx += 1
-
-    for ax in axes[-4:]:
-        ax.set_xlabel(r"$M_{q\bar q}^2$")
-
-    for ax in axes[::4]:
-        ax.set_ylabel(r"$F_2$")
-
-    plt.tight_layout()
-    plt.show()
+    #     return result.mean, result.sdev
 
 
-# Example usage
-Q = np.sqrt(45)  # GeV
-xB = 1e-2
 
-plot_unintegrated_cross_section(Q, xB)
 
 
 
