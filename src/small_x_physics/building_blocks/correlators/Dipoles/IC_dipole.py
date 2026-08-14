@@ -16,6 +16,10 @@ class ICDipole:
     def MV_model_S2(self, x, y):
         r = self.radius(x, y) + 1e-12
         return np.exp(-(r**2 * self.Qs0**2)**self.gamma / 4 * np.log(1/(r * self.LambdaQCD) + self.ec * np.exp(1)))
+    
+    def GBW_model_S2(self, x, y):
+        r = self.radius(x, y) + 1e-12
+        return np.exp(-(r**2 * self.Qs0**2) / 4)
 
  
     
