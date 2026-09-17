@@ -45,3 +45,16 @@ htmlcov/
 
 # Misc
 *.log
+
+# Explicit duplicate metadata/cache patterns
+*.egg-info/
+**/__pycache__/
+
+# Profiler output. These are derived artifacts: regenerate with
+#   scalene <script>          -> scalene-profile.json + scalene-profile.html
+#   python -m cProfile -o profile.out <script>
+# The scalene json for a long run can exceed 100 MB, which GitHub refuses to
+# accept, so keep them out of the repository.
+scalene-profile.*
+profile.out
+*.prof
