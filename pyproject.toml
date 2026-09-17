@@ -10,3 +10,9 @@ dependencies = [
     "numpy",
     "scipy"
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
