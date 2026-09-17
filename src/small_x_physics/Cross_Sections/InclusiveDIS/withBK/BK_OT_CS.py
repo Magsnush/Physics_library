@@ -5,7 +5,6 @@ import vegas
 import os
 import multiprocessing
 from scipy.integrate import dblquad
-from small_x_physics.numerics.totalDIS import LO
 from small_x_physics.building_blocks.wavefunctions.OT_photon_wavefunctions.LO import LO_OT_PhotonWF_squared
 from small_x_physics.building_blocks.correlators.Dipoles.BK_dipole import BKDipole   
 from small_x_physics.building_blocks.constants import Nc, alpha_em, LambdaQCD
