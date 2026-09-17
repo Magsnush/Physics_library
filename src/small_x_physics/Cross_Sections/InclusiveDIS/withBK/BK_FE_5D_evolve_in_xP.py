@@ -21,7 +21,7 @@ class FE_CrossSection_BK_5D:
         Evaluates the 5D integrand for the finite-energy constrained DIS cross section with BK evolution in xP at the given point(s) x.
 
     """
-    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization):
+    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False):
         self.Q = Q
         self.xB = xB
         self.mf = mf
@@ -34,6 +34,7 @@ class FE_CrossSection_BK_5D:
         self.x0 = x0
         self.mcpoints = mcpoints
         self.polarization = polarization
+        self.largeNc = largeNc
         # self.Mqq_sq = None
         # self.xP = None
 
@@ -65,12 +66,11 @@ class FE_CrossSection_BK_5D:
         # Target amplitude: 1 - S(u) - S(up) + S4(u, up)
         BK_S2 = self.BKdipole.BK_evolved_MV_model_S2_Y(np.stack([u, np.zeros_like(u)], axis=-1), np.array([0.0, 0.0]), Y)
         BK_S2_conj = self.BKdipole.BK_evolved_MV_model_S2_Y(np.stack([up, np.zeros_like(up)], axis=-1), np.array([0.0, 0.0]), Y)
-        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta, dipole_args={"Y": Y})
+        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta, dipole_args={"Y": Y}, largeNc=self.largeNc)
         TargetAmp = 1 - BK_S2 - BK_S2_conj + IC_S4
 
         # Phase space integral
         arg = z*(1-z) * Mqq_sq - self.mf**2
-
         r2 = u**2 + up**2 - 2*u*up*np.cos(theta)
 
         # Compute kinematic upper bound on Msq_qq

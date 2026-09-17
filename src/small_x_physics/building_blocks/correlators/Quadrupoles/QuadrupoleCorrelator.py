@@ -46,40 +46,31 @@ class QuadrupoleCorrelatorModel:
         # Final finite-Nc quadrupole expression
         return SuSup * BigFactor * np.exp((-self.Nc/4)*F1 + (1/(2*self.Nc))*F2)
 
-    def LNc_quadrupole(self, x1, x2, x2p, x1p):
+    def LNc_quadrupole(self, x1, x2, x2p, x1p, dipole_args):
+        """Compute the large-Nc limit of the same Dominguez et al. expression.
 
-        CF = self.CF
+        This takes dipole_args like FNc_quadrupole does, so it works with a
+        rapidity-dependent dipole (e.g. BKDipole.BK_evolved_MV_model_S2_Y) and
+        not only with an analytic one.
+        """
+        F1 = self.F(x1, x2p, x2, x1p, dipole_args)
+        F2 = self.F(x1, x2, x2p, x1p, dipole_args)
 
-        # Always ensure broadcasting works
-        x1  = np.array(x1)
-        x2  = np.array(x2)
-        x1p = np.array(x1p)               # <---- THIS IS OK
-        x2p = np.array(x2p)
+        # Shared dipole S(r) factors
+        SuSup = np.exp(self.log_dipole(x1, x2, dipole_args) + self.log_dipole(x2p, x1p, dipole_args))
 
-        # Make f a callable that returns the dipole exponent (log S_xy)
-        # S_xy is a method on the Dipole class, so call it with (x,y)
-        S2_xy = lambda x, y: self.dipole(x, y) + 1e-14
-
-        f = lambda x, y: np.log(S2_xy(x, y))
-        
-        # Functions that appear in quadrupole in terms of dipole exponential
-        def F(x1,x2,x2p,x1p):
-            return (1/CF)*(f(x1,x2p) 
-                + f(x2,x1p) 
-                - f(x1,x1p) 
-                - f(x2,x2p))              # <----- THIS IS OK
-        
-        F1 = F(x1,x2p,x2,x1p)
-        F2 = F(x1,x2,x2p,x1p) 
-
-        # Shared dipole S(u) factors
-        SuSup = np.exp(f(x1, x2) + f(x2p, x1p)) # <---- THIS IS OK
-        
-        Su_mixed = np.exp(f(x1, x1p) + f(x2p, x2))
+        Su_mixed = np.exp(self.log_dipole(x1, x1p, dipole_args) + self.log_dipole(x2p, x2, dipole_args))
 
         return SuSup - (F2 / (F1 + 1e-12)) * (SuSup - Su_mixed)
 
-    def quadrupole_polar(self, u, up, z, theta, dipole_args = None):
+    def quadrupole_polar(self, u, up, z, theta, dipole_args = None, largeNc = False):
+        """Quadrupole in polar integration variables.
+
+        Parameters
+        ----------
+        largeNc : bool, default False
+            If True use the large-Nc expression, otherwise the finite-Nc one.
+        """
         if dipole_args is None:
             dipole_args = {}
         x1  = np.stack([(1 - z) * u, np.zeros_like(u)], axis=-1)
@@ -87,5 +78,7 @@ class QuadrupoleCorrelatorModel:
         x1p = np.stack([(1 - z) * up * np.cos(theta), (1 - z) * up * np.sin(theta)], axis=-1)
         x2p = np.stack([-z * up * np.cos(theta), -z * up * np.sin(theta)], axis=-1)
 
+        if largeNc:
+            return self.LNc_quadrupole(x1, x2, x2p, x1p, dipole_args)
         return self.FNc_quadrupole(x1, x2, x2p, x1p, dipole_args)
 

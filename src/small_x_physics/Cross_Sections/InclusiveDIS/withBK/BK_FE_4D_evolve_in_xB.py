@@ -21,7 +21,7 @@ class FE_CrossSection_BK_4D:
         Computes the longitudinal and transverse cross sections by integrating the LO optical theorem integrand.
 
     """
-    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization):
+    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False):
         self.Q = Q
         self.xB = xB
         self.mf = mf
@@ -34,6 +34,7 @@ class FE_CrossSection_BK_4D:
         self.x0 = x0
         self.mcpoints = mcpoints
         self.polarization = polarization
+        self.largeNc = largeNc
 
         self.photon_wavefunction_squared = LO_FE_PhotonWF_squared(self.mf, self.Zf, Nc=Nc, alpha_em=alpha_em)
         self.Y = np.log(self.x0 / self.xB)
@@ -54,7 +55,7 @@ class FE_CrossSection_BK_4D:
         # Target amplitude: 1 - S(u) - S(up) + S4(u, up)
         BK_S2 = self.BKdipole.BK_evolved_MV_model_S2(np.stack([u, np.zeros_like(u)], axis=-1), np.array([0, 0]))
         BK_S2_conj = self.BKdipole.BK_evolved_MV_model_S2(np.stack([up, np.zeros_like(up)], axis=-1), np.array([0.0, 0.0]))
-        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta)
+        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta, largeNc=self.largeNc)
         TargetAmp = 1 - BK_S2 - BK_S2_conj + IC_S4
 
         # Phase space integral
