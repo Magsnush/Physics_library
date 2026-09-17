@@ -6,7 +6,7 @@ from small_x_physics.building_blocks.constants import alpha_em
 import argparse
 
 parser = argparse.ArgumentParser(description="Compute leading-order DIS cross sections.")
-parser.add_argument("--Q", type=float, default=np.sqrt(45), help="Photon virtuality")
+parser.add_argument("--Q", type=float, default=np.sqrt(1), help="Photon virtuality")
 parser.add_argument("--xB", type=float, default=0.01, help="Bjorken x")
 parser.add_argument("--mf", type=float, default=0.14, help="Quark mass")
 parser.add_argument("--Zf", type=float, default=np.sqrt(2/3), help="Quark charge")
@@ -20,7 +20,7 @@ args = parser.parse_args()
 OT_cross_section = OT_CrossSection_LO(Q=args.Q, mf=args.mf, Zf=args.Zf, sigma0=args.sigma0, Qs0=args.Qs0, gamma=args.gamma, ec=args.ec)
 
 r_min = 1e-6
-r_max = 10.0
+r_max = 20.0
 z_min = 1e-8
 z_max = 1.0 - z_min
 
@@ -65,3 +65,28 @@ FE_F2 =  (FE_L + FE_T)
 FE_F2_err = np.sqrt(FE_L_err**2 + FE_T_err**2)
 
 print(f"F2 = {FE_F2:.6e} ± {FE_F2_err:.6e}")
+
+from small_x_physics.Cross_Sections.collinear_dipole_matching.LO_FE_CS_Z0_in_correlator import FE_CrossSection_LO_z_is_zero_correlator
+FE_CrossSection_z_is_zero = FE_CrossSection_LO_z_is_zero_correlator(Q=args.Q, xB=args.xB, mf=args.mf, Zf=args.Zf, sigma0=args.sigma0, Qs0=args.Qs0, gamma=args.gamma, ec=args.ec)
+
+CS_L_z_is_zero, CS_L_err_z_is_zero, CS_T_z_is_zero, CS_T_err_z_is_zero = (
+    FE_CrossSection_z_is_zero.compute_cross_section_FE(
+        r_min,
+        r_max,
+        z_min,
+        z_max,
+        theta_min,
+        theta_max,
+    )
+)
+
+FE_L_z_is_zero = args.Q**2 / (4 * np.pi**2 * alpha_em) * CS_L_z_is_zero
+FE_L_err_z_is_zero = args.Q**2 / (4 * np.pi**2 * alpha_em) * CS_L_err_z_is_zero
+
+FE_T_z_is_zero = args.Q**2 / (4 * np.pi**2 * alpha_em) * CS_T_z_is_zero
+FE_T_err_z_is_zero = args.Q**2 / (4 * np.pi**2 * alpha_em) * CS_T_err_z_is_zero
+
+FE_F2_z_is_zero =  (FE_L_z_is_zero + FE_T_z_is_zero)
+FE_F2_err_z_is_zero = np.sqrt(FE_L_err_z_is_zero**2 + FE_T_err_z_is_zero**2)
+
+print(f"F2 = {FE_F2_z_is_zero:.6e} ± {FE_F2_err_z_is_zero:.6e}")
