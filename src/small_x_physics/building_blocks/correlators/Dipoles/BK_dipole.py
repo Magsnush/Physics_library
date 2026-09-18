@@ -73,12 +73,21 @@ class BKDipole:
     S_floor : float, default 1e-14
         Lower bound applied to S = 1 - N. The quadrupole takes log(S), so S must
         stay strictly positive. Matches the floor used in the original module.
-    on_out_of_range : {"clamp", "raise", "extrapolate"}, default "clamp"
+    on_out_of_range : {"clamp", "raise"}, default "clamp"
         What to do when a requested (r, Y) falls outside the grid stored in the
         file. "clamp" evaluates at the nearest boundary (the physically sensible
-        default: N -> 0 as r -> 0 and N saturates at large r), "raise" refuses,
-        and "extrapolate" lets the spline run free. Unlike the original module
-        the bounds come from the file, not from hardcoded numbers.
+        default: N -> 0 as r -> 0 and N saturates at large r), "raise" refuses.
+        Unlike the original module the bounds come from the file, not from
+        hardcoded numbers.
+
+        There is deliberately no "extrapolate" option. RectBivariateSpline
+        evaluates through FITPACK's bispev, which restricts its argument to the
+        knot interval, so an out-of-range query returns the boundary value no
+        matter what: the spline cannot be made to extrapolate. Clamping is
+        therefore not a policy this class chooses, it is what the interpolator
+        does regardless. What this class adds is making it visible, through the
+        warning and the counters below, instead of silent. Genuine extrapolation
+        needs a different object -- subclass and override N().
     warn_on_clamp : bool, default True
         Emit a warning the first time a query is clamped. Counts are always
         accumulated in `n_clamped_r` / `n_clamped_Y` regardless.
@@ -111,10 +120,15 @@ class BKDipole:
         on_out_of_range="clamp",
         warn_on_clamp=True,
     ):
-        if on_out_of_range not in ("clamp", "raise", "extrapolate"):
+        if on_out_of_range == "extrapolate":
             raise ValueError(
-                f"on_out_of_range must be 'clamp', 'raise' or 'extrapolate', "
-                f"got {on_out_of_range!r}"
+                "on_out_of_range='extrapolate' is not available: RectBivariateSpline "
+                "clamps to the knot interval internally, so the spline cannot "
+                "extrapolate. Subclass and override N() if you need it."
+            )
+        if on_out_of_range not in ("clamp", "raise"):
+            raise ValueError(
+                f"on_out_of_range must be 'clamp' or 'raise', got {on_out_of_range!r}"
             )
 
         self.filename = str(bkfile)
@@ -270,9 +284,6 @@ class BKDipole:
         r_arr, Y_arr = np.broadcast_arrays(
             np.asarray(r, dtype=float), np.asarray(Y, dtype=float)
         )
-
-        if self.on_out_of_range == "extrapolate":
-            return r_arr, Y_arr
 
         r_out = (r_arr < self.r_min) | (r_arr > self.r_max)
         Y_out = (Y_arr < self.Y_min) | (Y_arr > self.Y_max)
