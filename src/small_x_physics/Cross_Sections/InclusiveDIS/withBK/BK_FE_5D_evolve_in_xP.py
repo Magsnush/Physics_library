@@ -33,6 +33,8 @@ class FE_CrossSection_BK_5D:
         self.bkfile = bkfile
         self.x0 = x0
         self.mcpoints = mcpoints
+        if polarization not in ("L", "T"):
+            raise ValueError(f"polarization must be 'L' or 'T', got {polarization!r}")
         self.polarization = polarization
         self.largeNc = largeNc
         # self.Mqq_sq = None
@@ -59,15 +61,19 @@ class FE_CrossSection_BK_5D:
         Y = np.log(self.x0 / xP)
         #Mqq_sq = xP * (W2 + self.Q**2) - self.Q**2
         
-        # Photon wavefunction squared
-        Long_wf_sq = self.photon_wavefunction_squared.psi_L_squared(self.Q, u, up, z, theta)
-        Trans_wf_sq = self.photon_wavefunction_squared.psi_T_squared(self.Q, u, up, z, theta)
+        # Photon wavefunction squared, only for the polarization this object integrates
+        if self.polarization == "L":
+            wf_sq = self.photon_wavefunction_squared.psi_L_squared(self.Q, u, up, z, theta)
+        else:
+            wf_sq = self.photon_wavefunction_squared.psi_T_squared(self.Q, u, up, z, theta)
 
-        # Target amplitude: 1 - S(u) - S(up) + S4(u, up)
-        BK_S2 = self.BKdipole.BK_evolved_MV_model_S2_Y(np.stack([u, np.zeros_like(u)], axis=-1), np.array([0.0, 0.0]), Y)
-        BK_S2_conj = self.BKdipole.BK_evolved_MV_model_S2_Y(np.stack([up, np.zeros_like(up)], axis=-1), np.array([0.0, 0.0]), Y)
-        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta, dipole_args={"Y": Y}, largeNc=self.largeNc)
-        TargetAmp = 1 - BK_S2 - BK_S2_conj + IC_S4
+        # Target amplitude: 1 - S(u) - S(up) + S4(u, up). S(u) and S(up) are two of
+        # the six pair dipoles the quadrupole is built from, so all three come from
+        # six dipole evaluations instead of sixteen. The dipole is the quadrupole
+        # model's, which is what a caller swapping in another dipole replaces.
+        S_u, S_up, S4 = self.quad_model_ic.polar_correlators(
+            u, up, z, theta, dipole_args={"Y": Y}, largeNc=self.largeNc)
+        TargetAmp = 1 - S_u - S_up + S4
 
         # Phase space integral
         arg = z*(1-z) * Mqq_sq - self.mf**2
@@ -91,11 +97,6 @@ class FE_CrossSection_BK_5D:
         # In the paper the normalization factor and the factor 1/(z*(1-z)) has been absorbed into the definition of the wavefunction squared, but here we keep it explicit.
         NormFactor = 1/(4*np.pi)
         Jac = ((u*up)/(z*(1-z))) * 2*np.pi #* (W2 + self.Q**2)  # The factor of (W2 + Q^2) comes from the change of variables from Mqq_sq to xP .
-
-        if self.polarization == "L":
-            wf_sq = Long_wf_sq
-        elif self.polarization == "T":
-            wf_sq = Trans_wf_sq
 
         return (
             (self.sigma0/2)

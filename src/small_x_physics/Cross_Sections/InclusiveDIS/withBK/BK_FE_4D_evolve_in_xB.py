@@ -33,6 +33,8 @@ class FE_CrossSection_BK_4D:
         self.bkfile = bkfile
         self.x0 = x0
         self.mcpoints = mcpoints
+        if polarization not in ("L", "T"):
+            raise ValueError(f"polarization must be 'L' or 'T', got {polarization!r}")
         self.polarization = polarization
         self.largeNc = largeNc
 
@@ -48,15 +50,17 @@ class FE_CrossSection_BK_4D:
         z = x[2, :]
         theta = x[3, :]
 
-        # Photon wavefunction squared
-        Long_wf_sq = self.photon_wavefunction_squared.psi_L_squared(self.Q, u, up, z, theta)
-        Trans_wf_sq = self.photon_wavefunction_squared.psi_T_squared(self.Q, u, up, z, theta)
+        # Photon wavefunction squared, only for the polarization this object integrates
+        if self.polarization == "L":
+            wf_sq = self.photon_wavefunction_squared.psi_L_squared(self.Q, u, up, z, theta)
+        else:
+            wf_sq = self.photon_wavefunction_squared.psi_T_squared(self.Q, u, up, z, theta)
 
-        # Target amplitude: 1 - S(u) - S(up) + S4(u, up)
-        BK_S2 = self.BKdipole.BK_evolved_MV_model_S2(np.stack([u, np.zeros_like(u)], axis=-1), np.array([0, 0]))
-        BK_S2_conj = self.BKdipole.BK_evolved_MV_model_S2(np.stack([up, np.zeros_like(up)], axis=-1), np.array([0.0, 0.0]))
-        IC_S4 = self.quad_model_ic.quadrupole_polar(u, up, z, theta, largeNc=self.largeNc)
-        TargetAmp = 1 - BK_S2 - BK_S2_conj + IC_S4
+        # Target amplitude: 1 - S(u) - S(up) + S4(u, up). S(u) and S(up) are two of
+        # the six pair dipoles the quadrupole is built from, so all three come from
+        # six dipole evaluations instead of sixteen.
+        S_u, S_up, S4 = self.quad_model_ic.polar_correlators(u, up, z, theta, largeNc=self.largeNc)
+        TargetAmp = 1 - S_u - S_up + S4
 
         # Phase space integral
         Msq_max = self.Q**2 * (1 - self.xB) / self.xB
@@ -70,11 +74,6 @@ class FE_CrossSection_BK_4D:
 
         NormFactor = 1/(4*np.pi)
         Jac = ((u*up)/(z*(1-z))) * 2*np.pi
-
-        if self.polarization == "L":
-            wf_sq = Long_wf_sq
-        elif self.polarization == "T":
-            wf_sq = Trans_wf_sq
 
         return (
             (self.sigma0/2)

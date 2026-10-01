@@ -1,7 +1,7 @@
 ### CONTAINS LEADING ORDER FINITE ENERGY CONSTRAINED PHOTON LIGHTCONE WAVEFUNCTIONS ###
 
 import numpy as np
-from scipy.special import kv
+from scipy.special import k0, k1
 from small_x_physics.building_blocks.constants import Nc, alpha_em
 
 class LO_FE_PhotonWF_squared:
@@ -45,14 +45,16 @@ class LO_FE_PhotonWF_squared:
         epsilon_sq = np.maximum(epsilon_sq, 1e-12)
         Cf_T = 2 * self.Nc * self.alpha_em * zf**2 /np.pi
 
-        # Bessel functions that represent coordinate space version of the LCWFs
+        # Bessel functions that represent coordinate space version of the LCWFs.
+        # The arguments are real and positive, so K0, K1 are real and the
+        # conjugate wavefunction is just the same function of up.
         sqrt_eps = np.sqrt(epsilon_sq)
         bessel_arg = u * sqrt_eps
         bessel_arg_conj = up * sqrt_eps
-        K0 = kv(0,bessel_arg)
-        K0_conj = np.conjugate(kv(0, bessel_arg_conj))
-        K1 = kv(1,bessel_arg)
-        K1_conj = np.conjugate(kv(1, bessel_arg_conj))
+        K0 = k0(bessel_arg)
+        K0_conj = k0(bessel_arg_conj)
+        K1 = k1(bessel_arg)
+        K1_conj = k1(bessel_arg_conj)
 
         K0_sq = K0 * K0_conj
         K1_sq = K1 * K1_conj
@@ -76,8 +78,8 @@ class LO_FE_PhotonWF_squared:
         sqrt_eps = np.sqrt(epsilon_sq)
         bessel_arg = u * sqrt_eps
         bessel_arg_conj = up * sqrt_eps
-        K0 = kv(0,bessel_arg)
-        K0_conj = np.conjugate(kv(0, bessel_arg_conj))
+        K0 = k0(bessel_arg)
+        K0_conj = k0(bessel_arg_conj)
 
         K0_sq = K0 * K0_conj
 
