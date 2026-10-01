@@ -66,13 +66,14 @@ class FE_CrossSection_LO_z_is_zero_correlator:
         TargetAmp = 1 - IC_S2 - IC_S2_conj + IC_S4
 
         Msq_max = self.Q**2 * (1 - self.xB) / self.xB
-        arg = Msq_max * z * (1-z) - self.mf**2
+        # z is a scalar in dsigma_dz but an array in the 4D cross_section, so
+        # the kinematic cutoff is applied element-wise rather than with an `if`.
+        arg = np.broadcast_to(Msq_max * z * (1-z) - self.mf**2, np.shape(u))
         r2 = u**2 + up**2 - 2*u*up*np.cos(theta)
         I_P = np.zeros_like(r2)
-        if arg > 0:
-            valid = r2 > 0
-            zeta = np.sqrt(arg * r2[valid])
-            I_P[valid] = (zeta * jv(1, zeta)/ (2*np.pi*r2[valid]))
+        valid = (arg > 0) & (r2 > 0)
+        zeta = np.sqrt(arg[valid] * r2[valid])
+        I_P[valid] = (zeta * jv(1, zeta)/ (2*np.pi*r2[valid]))
 
         NormFactor = 1/(4*np.pi)
         Jac = ((u*up)/(z*(1-z))) * 2*np.pi
@@ -117,7 +118,26 @@ class FE_CrossSection_LO_z_is_zero_correlator:
                 u, up, self.z, theta
             )
 
-    def dsigma_dz(self, 
+    def _vegas_plan(self):
+        """Process count and iteration settings shared by the integrals below.
+
+        Bounded chunk-targeted batch heuristic: target ~4 chunks per core, but
+        clamp the batch size to a safe range.
+        """
+        n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
+        target_chunks_per_core = 4
+        batch_min = 1000
+        batch_max = 50000
+        raw_batch = int(self.mcpoints // (target_chunks_per_core * max(1, n_cores)))
+        min_neval_batch = max(batch_min, min(batch_max, raw_batch))
+
+        sensible_nproc = min(n_cores, max(1, int(self.mcpoints // min_neval_batch)))
+
+        warm = dict(nitn=10, neval=int(self.mcpoints//10), min_neval_batch=min_neval_batch)
+        full = dict(nitn=20, neval=int(self.mcpoints), min_neval_batch=min_neval_batch)
+        return sensible_nproc, warm, full
+
+    def dsigma_dz(self,
             z,
             r_min,
             r_max,
@@ -127,21 +147,8 @@ class FE_CrossSection_LO_z_is_zero_correlator:
         """
         Compute the differential cross section dσ/dz for a given value of z.
         """
-        # Bounded chunk-targeted batch heuristic:
-        # target ~4 chunks per core, but clamp to a safe range.
         self.z = z
-        n_cores = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
-        target_chunks_per_core = 4
-        batch_min = 1000
-        batch_max = 50000
-        raw_batch = int(self.mcpoints // (target_chunks_per_core * max(1, n_cores)))
-        min_neval_batch = max(batch_min, min(batch_max, raw_batch))
-
-
-        sensible_nproc = min(n_cores, max(1, int(self.mcpoints // min_neval_batch)))
-
-        warm = dict(nitn=10, neval=int(self.mcpoints//10), min_neval_batch=min_neval_batch)
-        full = dict(nitn=20, neval=int(self.mcpoints), min_neval_batch=min_neval_batch)
+        sensible_nproc, warm, full = self._vegas_plan()
 
         integ = vegas.Integrator([[r_min, r_max],[r_min, r_max],[theta_min, theta_max]],nproc=sensible_nproc)
 
@@ -149,6 +156,33 @@ class FE_CrossSection_LO_z_is_zero_correlator:
 
         integ(fixed_z_integrand, **warm)
         result = integ(fixed_z_integrand, **full)
+
+        return (
+            result.mean,
+            result.sdev,
+        )
+
+    def cross_section(self,
+            r_min,
+            r_max,
+            z_min,
+            z_max,
+            theta_min,
+            theta_max,
+        ):
+        """
+        Compute the cross section integrated over z, as one 4D integral over
+        (u, u', z, theta), for this object's polarization.
+        """
+        sensible_nproc, warm, full = self._vegas_plan()
+
+        integ = vegas.Integrator(
+            [[r_min, r_max], [r_min, r_max], [z_min, z_max], [theta_min, theta_max]],
+            nproc=sensible_nproc,
+        )
+
+        integ(self, **warm)
+        result = integ(self, **full)
 
         return (
             result.mean,
