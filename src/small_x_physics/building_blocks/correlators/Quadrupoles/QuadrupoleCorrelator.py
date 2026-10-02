@@ -85,6 +85,14 @@ class QuadrupoleCorrelatorModel:
 
         BigFactor = term1 + term2
 
+        # At Delta = 0 both terms are 0/0. Their sum is
+        # cosh(a) + (F1/2 - F2) (Nc/2) sinh(a)/a with a = Nc sqrt(Delta)/4, which
+        # tends to 1 + Nc (F1/2 - F2)/2. That happens when all six dipoles are
+        # equal, e.g. for a fully transparent target (S = 1 for every pair), where
+        # the quadrupole must reduce to S(u) S(u') and not to 0.
+        degenerate = ~good
+        BigFactor[degenerate] = 1 + self.Nc * (F1[degenerate] / 2 - F2[degenerate]) / 2
+
         # Final finite-Nc quadrupole expression
         return SuSup * BigFactor * np.exp((-self.Nc/4)*F1 + (1/(2*self.Nc))*F2)
 
