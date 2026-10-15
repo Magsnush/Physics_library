@@ -1,7 +1,7 @@
 # Leading order cross section in DIS based on the finite energy constrained cross section found in https://arxiv.org/pdf/2601.07302. Tested and works well.
 import numpy as np
 import vegas
-from scipy.special import jv
+from scipy.special import j1
 import os
 import multiprocessing
 
@@ -75,7 +75,7 @@ class FE_CrossSection_LO_diff:
         I_P = np.zeros_like(r2)
         valid = (arg > 0) & (r2 > 0)
         zeta = np.sqrt(arg[valid] * r2[valid])
-        I_P[valid] = (zeta * jv(1, zeta)/ (2*np.pi*r2[valid]))
+        I_P[valid] = (zeta * j1(zeta)/ (2*np.pi*r2[valid]))
 
         NormFactor = 1/(4*np.pi)
         Jac = ((u*up)/(z*(1-z))) * 2*np.pi

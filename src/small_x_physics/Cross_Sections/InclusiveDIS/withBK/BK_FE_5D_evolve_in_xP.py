@@ -4,7 +4,7 @@ import numpy as np
 import vegas
 import os
 import multiprocessing
-from scipy.special import jv
+from scipy.special import j0
 from small_x_physics.building_blocks.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
 from small_x_physics.building_blocks.correlators.Dipoles.BK_dipole import BKDipole  
 from small_x_physics.building_blocks.correlators.Quadrupoles.QuadrupoleCorrelator import QuadrupoleCorrelatorModel 
@@ -90,8 +90,8 @@ class FE_CrossSection_BK_5D:
         I_P = np.zeros_like(arg, dtype=float)
         if np.any(valid):
             zeta = np.sqrt(arg[valid] * r2[valid])
-            # J0 Bessel kernel for the k-integral (scipy.special.jv supports arrays)
-            I_P_valid = z[valid]*(1-z[valid])*jv(0, zeta) / (4.0 * np.pi)      # The factor of 1/4pi comes expressing the phase space integral in terms of the 0th order Bessel function.
+            # J0 Bessel kernel for the k-integral
+            I_P_valid = z[valid]*(1-z[valid])*j0(zeta) / (4.0 * np.pi)      # The factor of 1/4pi comes expressing the phase space integral in terms of the 0th order Bessel function.
             I_P[valid] = I_P_valid
 
         # In the paper the normalization factor and the factor 1/(z*(1-z)) has been absorbed into the definition of the wavefunction squared, but here we keep it explicit.

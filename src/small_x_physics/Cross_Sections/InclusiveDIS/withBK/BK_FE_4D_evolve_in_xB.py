@@ -4,7 +4,7 @@ import numpy as np
 import vegas
 import os
 import multiprocessing
-from scipy.special import jv
+from scipy.special import j1
 from small_x_physics.building_blocks.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
 from small_x_physics.building_blocks.correlators.Dipoles.BK_dipole import BKDipole  
 from small_x_physics.building_blocks.correlators.Quadrupoles.QuadrupoleCorrelator import QuadrupoleCorrelatorModel 
@@ -70,7 +70,7 @@ class FE_CrossSection_BK_4D:
         I_P = np.zeros_like(arg)
         if np.any(valid):
             zeta = np.sqrt(arg[valid] * r2[valid])
-            I_P[valid] = zeta * jv(1, zeta) / (2*np.pi*r2[valid])
+            I_P[valid] = zeta * j1(zeta) / (2*np.pi*r2[valid])
 
         NormFactor = 1/(4*np.pi)
         Jac = ((u*up)/(z*(1-z))) * 2*np.pi
