@@ -15,6 +15,11 @@ assembled from them:
 - Cross sections for **matching the dipole picture onto collinear
   factorisation** (the FE cross section with the quadrupole evaluated at z = 0,
   and its difference from the full one).
+- The **reduced cross section** σ_r, with F_L, F_T and F₂, for each of these in
+  one call.
+- **Extrapolations of the BK dipole above x₀**, where the rcBK solution has no
+  data but the 5D FE cross section needs it: frozen, exponential, a large-x
+  falloff, or leaving that region out.
 
 The multidimensional integrals are done with [VEGAS](https://vegas.readthedocs.io)
 Monte Carlo, vectorised over batches of points and parallelised over CPU cores.
@@ -36,8 +41,23 @@ matplotlib is only needed for the plotting check scripts.
 
 ## Quick start
 
-The finite-energy constrained structure functions with an rcBK-evolved dipole,
-using the example BK solution in `data/mv.dat` (run from the repository root):
+The reduced cross section at one point, from the finite-energy constrained 5D
+cross section with the example BK solution in `data/mv.dat` (run from the
+repository root):
+
+```python
+from small_x_physics.Cross_Sections.InclusiveDIS.reduced_cross_section import sigma_r_FE_BK_5D
+
+if __name__ == "__main__":
+    sf = sigma_r_FE_BK_5D(Q2=10.0, xB=1e-3, mf=0.14, Zf=(2/3)**0.5,   # u, d, s with a common mass
+                          sigma0=2 * 2.57 * 18.81,                     # GeV^-2 (sigma0/2 = 18.81 mb)
+                          bkfile="data/mv.dat", mcpoints=100_000,
+                          extrapolation="falloff", falloff_n=5)
+    print(f"sigma_r = {sf.sigma_r:.4f} +- {sf.sigma_r_err:.4f}, F_2 = {sf.F2:.4f}, F_L = {sf.FL:.4f}")
+```
+
+The same physics with the cross-section classes directly, here the 4D cross
+section:
 
 ```python
 import numpy as np
@@ -90,10 +110,12 @@ src/small_x_physics/
 │   └── correlators/
 │       ├── Dipoles/IC_dipole.py              ICDipole: MV and GBW dipoles
 │       ├── Dipoles/BK_dipole.py              BKDipole: rcBK solution from a file
+│       ├── Dipoles/BK_extrapolations.py      the BK dipole continued above x0
 │       └── Quadrupoles/QuadrupoleCorrelator.py   QuadrupoleCorrelatorModel
 └── Cross_Sections/
     ├── InclusiveDIS/LO/                  OT and FE cross sections, MV/GBW dipole
     ├── InclusiveDIS/withBK/              OT and FE cross sections, BK dipole
+    ├── InclusiveDIS/reduced_cross_section/   sigma_r, F_L, F_T, F_2 for all of them
     └── collinear_dipole_matching/        FE cross sections for collinear matching
 data/mv.dat                               example rcBK solution (see data/README.md)
 ```
@@ -108,6 +130,7 @@ The `NLO.py` files next to the LO wavefunctions are empty placeholders.
 | `LO_FE_PhotonWF_squared(mf, Zf)` | The FE counterparts, a product of amplitude and conjugate amplitude with dipole sizes `u`, `u'` at relative angle `theta`: `psi_L_squared(Q, u, up, z, theta)`, `psi_T_squared(...)`. |
 | `ICDipole(Qs0, gamma, ec, LambdaQCD)` | Analytic dipole S-matrices of transverse positions `x`, `y` (2-vectors on the last axis): `MV_model_S2(x, y)` $= \exp[-(r^2 Q_{s0}^2)^\gamma/4 \, \ln(1/(r\Lambda_\mathrm{QCD}) + e_c e)]$, `GBW_model_S2(x, y)` $= \exp(-r^2 Q_{s0}^2/4)$. |
 | `BKDipole(bkfile, Y=None)` | rcBK solution N(r, Y) read from a file and interpolated with a bicubic spline: `N(r, Y)`, `S_r(r, Y)` = 1 − N, `S_xy(x, y, Y)`, `rapidity_from_x(x)` = ln(x0/x). The initial-condition parameters in the file header are available as `Qs0_sq`, `gamma`, `ec`, `x0`, `LambdaQCD`. |
+| `ExponentialBackwardBKDipole(bkfile)`, `LargeXFalloffBKDipole(bkfile, n)` | BKDipole continued above the x₀ of the file instead of held at Y = 0: $N(r,x)=N(r,x_0)(x_0/x)^{\lambda(r)}$ with λ(r) the solution's own d ln N/dY at x₀, or $N(r,x)=N(r,x_0)[(1-x)/(1-x_0)]^n$. Below x₀ both are the ordinary BKDipole. |
 | `QuadrupoleCorrelatorModel(dipole_model, Nc, LambdaQCD)` | Quadrupole in the Gaussian approximation (eq. B21 of Dominguez, Marquet, Xiao and Yuan, Phys. Rev. D 83, 105005 (2011)), built from any dipole function: `quadrupole_polar(u, up, z, theta, dipole_args=None, largeNc=False)`. `polar_correlators(...)` returns S(u), S(u′) and S₄ together. |
 
 ### Cross sections
@@ -125,9 +148,19 @@ parameters, then call its integration method with the integration limits.
 | `FE_CrossSection_LO_z_is_zero_correlator` | `collinear_dipole_matching.LO_FE_CS_Z0_in_correlator` | FE with the quadrupole evaluated at z = 0 | 4D, VEGAS |
 | `FE_CrossSection_LO_diff` | `collinear_dipole_matching.LO_FE_CS_diff` | full FE minus the z = 0 one; integrand S₄(z) − S₄(0) | 4D, VEGAS |
 
-In the 5D cross section, $x_P = (M^2 + Q^2)/(W^2 + Q^2) \geq x_B$ with
-$W^2 = Q^2(1/x_B - 1)$. Where $x_P > x_0$ the BK solution has no data, and the
-dipole is held at its initial condition (Y = 0).
+In the 5D cross section, $x_P = (M^2 + Q^2)/(W^2 + Q^2) = x_B(1 + M^2/Q^2) \geq x_B$
+with $W^2 = Q^2(1/x_B - 1)$. Where $x_P > x_0$, i.e. for $M^2 > Q^2(x_0/x_B - 1)$, the
+BK solution has no data, and the `extrapolation` argument decides what is used:
+
+| `extrapolation` | Dipole for $x_P > x_0$ |
+|---|---|
+| `"frozen"` (default) | $N(r,x_0)$: the initial condition |
+| `"exponential"` | $N(r,x_0)\,(x_0/x_P)^{\lambda(r)}$, λ(r) the solution's own d ln N/dY at x₀ |
+| `"falloff"` | $N(r,x_0)\,[(1-x_P)/(1-x_0)]^{n}$, with `falloff_n=n` |
+| `"truncated"` | none: only $M^2 \leq Q^2(x_0/x_B - 1)$ is integrated, and σ = 0 when that range is empty |
+
+Below x₀ all four are the same BK solution, so the spread between them measures how
+much a prediction depends on the region the solution says nothing about.
 
 Methods and return values:
 
@@ -184,12 +217,16 @@ OT_CrossSection_LO(Q, mf, Zf, sigma0, Qs0, gamma, ec)
 FE_CrossSection_LO(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, mcpoints, polarization, dipole_model)
 OT_CrossSection_BK(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints)
 FE_CrossSection_BK_4D(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False)
-FE_CrossSection_BK_5D(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False)
+FE_CrossSection_BK_5D(Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False,
+                      extrapolation="frozen", falloff_n=None)
 ```
 
 The BK classes accept `Qs0`, `gamma` and `ec` but do not use them: the initial
 condition is the one the BK file was computed with. `BKDipole.check_parameters`
-compares the values you pass with the file header (see below). The default
+compares the values you pass with the file header (see below). `x0` is used: it
+sets the rapidity Y = ln(x0/x) at which the dipole is read, so it must be the x0
+the BK file's evolution starts from, and `FE_CrossSection_BK_5D` refuses one that
+is not. The default
 parameters used in these examples (`Qs0**2 = 0.104` GeV², γ = 1, e_c = 1,
 σ₀/2 = 18.81 mb) are the MV fit of
 [arXiv:1309.6963](https://arxiv.org/abs/1309.6963), which `data/mv.dat` was
@@ -286,6 +323,45 @@ S4 = quad.quadrupole_polar(np.full_like(r, u), r, np.full_like(r, z), np.full_li
                            dipole_args={"Y": Y})
 
 psi_T_sq = LO_FE_PhotonWF_squared(0.14, np.sqrt(2/3)).psi_T_squared(np.sqrt(10.0), u, r, z, theta)
+```
+
+### Reduced cross section
+
+`small_x_physics.Cross_Sections.InclusiveDIS.reduced_cross_section` integrates
+σ_L and σ_T for one quark flavour (group) at one (Q², x_B) and returns a
+`StructureFunctions` record with `FL`, `FT`, `F2`, `sigma_r`, each with its
+`_err`, and `y`. There is one function per cross section:
+
+| Function | Cross section | Model arguments |
+|---|---|---|
+| `sigma_r_OT_LO` | OT, MV dipole (quadrature) | `Qs0, gamma, ec` |
+| `sigma_r_FE_LO` | FE 4D, MV or GBW dipole | `Qs0, gamma, ec, mcpoints, dipole_model="MV"` |
+| `sigma_r_OT_BK` | OT, BK dipole | `bkfile, mcpoints` |
+| `sigma_r_FE_BK_4D` | FE 4D, BK dipole | `bkfile, mcpoints, largeNc=False` |
+| `sigma_r_FE_BK_5D` | FE 5D, BK dipole | `bkfile, mcpoints, extrapolation="frozen", falloff_n=None, largeNc=False` |
+
+All take `Q2, xB, mf, Zf, sigma0` first, and `sqrt_s=318` (HERA) for y. For the BK
+cross sections the initial-condition parameters and x₀ are read from the BK file,
+so they cannot disagree with it. The integration limits default to those listed
+above; `r_min`, `r_max`, `z_min` and `z_max` can be passed to change them.
+
+$$
+\sigma_r = F_2 - \frac{y^2}{1+(1-y)^2}F_L,\qquad y=\frac{Q^2}{s\,x_B},
+$$
+
+and since L and T come from separate integrations, the error of σ_r is
+$\sqrt{\delta F_T^2 + (1-f)^2\,\delta F_L^2}$. For several flavour groups, call the
+function once per group and add the results.
+
+```python
+import numpy as np
+from small_x_physics.Cross_Sections.InclusiveDIS.reduced_cross_section import sigma_r_FE_BK_5D
+
+if __name__ == "__main__":
+    light = dict(mf=0.14, Zf=np.sqrt(2/3), sigma0=2 * 2.57 * 18.81, bkfile="data/mv.dat", mcpoints=100_000)
+    for extrapolation, n in (("frozen", None), ("exponential", None), ("falloff", 5), ("truncated", None)):
+        sf = sigma_r_FE_BK_5D(Q2=10.0, xB=1e-3, extrapolation=extrapolation, falloff_n=n, **light)
+        print(f"{extrapolation:<12} sigma_r = {sf.sigma_r:.4f} +- {sf.sigma_r_err:.4f}")
 ```
 
 ### Parallel runs and number of points

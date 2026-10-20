@@ -6,14 +6,32 @@ import os
 import multiprocessing
 from scipy.special import j0
 from small_x_physics.building_blocks.wavefunctions.FE_photon_wavefunctions.LO import LO_FE_PhotonWF_squared
-from small_x_physics.building_blocks.correlators.Dipoles.BK_dipole import BKDipole  
-from small_x_physics.building_blocks.correlators.Quadrupoles.QuadrupoleCorrelator import QuadrupoleCorrelatorModel 
+from small_x_physics.building_blocks.correlators.Dipoles.BK_dipole import BKDipole
+from small_x_physics.building_blocks.correlators.Dipoles.BK_extrapolations import (
+    ExponentialBackwardBKDipole, LargeXFalloffBKDipole)
+from small_x_physics.building_blocks.correlators.Quadrupoles.QuadrupoleCorrelator import QuadrupoleCorrelatorModel
 from small_x_physics.building_blocks.constants import Nc, alpha_em, LambdaQCD
+
+EXTRAPOLATIONS = ("frozen", "exponential", "falloff", "truncated")
 
 @vegas.rbatchintegrand
 class FE_CrossSection_BK_5D:
     """
     Leading-order DIS cross section based on a finite-energy constraint together with BK evolution for a invariant mass dependent rapidity.
+
+    The dipole is evaluated at x_P = (M^2 + Q^2)/(W^2 + Q^2) = xB (1 + M^2/Q^2), i.e.
+    at Y = ln(x0/x_P), which lies above x0 (Y < 0) for M^2 > Q^2 (x0/xB - 1), where
+    the BK solution has no data. `extrapolation` chooses what is assumed there:
+
+        "frozen"       N(r, x) = N(r, x0): the initial condition (the default)
+        "exponential"  N(r, x) = N(r, x0) (x0/x)^lambda(r), lambda(r) the solution's
+                       own d ln N/dY at x0 (ExponentialBackwardBKDipole)
+        "falloff"      N(r, x) = N(r, x0) [(1 - x)/(1 - x0)]^falloff_n
+                       (LargeXFalloffBKDipole)
+        "truncated"    no extrapolation: only M^2 <= Q^2 (x0/xB - 1), i.e.
+                       x_P <= x0, is integrated
+
+    Below x0 all four use the same BK solution.
 
     Methods
     -------
@@ -21,7 +39,8 @@ class FE_CrossSection_BK_5D:
         Evaluates the 5D integrand for the finite-energy constrained DIS cross section with BK evolution in xP at the given point(s) x.
 
     """
-    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False):
+    def __init__(self, Q, xB, mf, Zf, sigma0, Qs0, gamma, ec, bkfile, x0, mcpoints, polarization, largeNc=False,
+                 extrapolation="frozen", falloff_n=None):
         self.Q = Q
         self.xB = xB
         self.mf = mf
@@ -37,11 +56,27 @@ class FE_CrossSection_BK_5D:
             raise ValueError(f"polarization must be 'L' or 'T', got {polarization!r}")
         self.polarization = polarization
         self.largeNc = largeNc
+        if extrapolation not in EXTRAPOLATIONS:
+            raise ValueError(f"extrapolation must be one of {EXTRAPOLATIONS}, got {extrapolation!r}")
+        if (extrapolation == "falloff") != (falloff_n is not None):
+            raise ValueError("falloff_n is needed for extrapolation='falloff' and for nothing else")
+        self.extrapolation = extrapolation
+        self.falloff_n = falloff_n
         # self.Mqq_sq = None
         # self.xP = None
 
         self.photon_wavefunction_squared = LO_FE_PhotonWF_squared(self.mf, self.Zf, Nc=Nc, alpha_em=alpha_em)
-        self.BKdipole = BKDipole(self.bkfile)
+        if extrapolation == "exponential":
+            self.BKdipole = ExponentialBackwardBKDipole(self.bkfile, warn_on_clamp=False)
+        elif extrapolation == "falloff":
+            self.BKdipole = LargeXFalloffBKDipole(self.bkfile, n=falloff_n, warn_on_clamp=False)
+        else:
+            self.BKdipole = BKDipole(self.bkfile)
+        # x0 defines the rapidity Y = ln(x0/x_P) at which the dipole is read, so it
+        # has to be the x0 the bk file's evolution starts from.
+        if not np.isclose(self.x0, self.BKdipole.x0, rtol=1e-6):
+            raise ValueError(f"x0 = {self.x0:g}, but {self.bkfile} starts its evolution at "
+                             f"x0 = {self.BKdipole.x0:g}")
         self.quad_model_ic = QuadrupoleCorrelatorModel(Nc=Nc, LambdaQCD=LambdaQCD, dipole_model=self.BKdipole.BK_evolved_MV_model_S2_Y)
 
     def __call__(self, x):
@@ -86,6 +121,8 @@ class FE_CrossSection_BK_5D:
         # Enforce kinematic bounds: return 0 if outside physical region
         valid = (Msq_min <= Mqq_sq) #& (arg > 0) & (r2 > 0)
         #valid = (xP_min <= xP) & (arg > 0) & (r2 > 0)
+        if self.extrapolation == "truncated":
+            valid &= xP <= self.x0
 
         I_P = np.zeros_like(arg, dtype=float)
         if np.any(valid):
@@ -109,6 +146,17 @@ class FE_CrossSection_BK_5D:
 
         
     def BK_FE_cross_section_5D(self, r_min, r_max, z_min, z_max, theta_min, theta_max, Mqq_sq_min, Mqq_sq_max):
+        """Integrate the cross section; returns (mean, sdev).
+
+        With extrapolation="truncated" the M^2 range is cut at x_P = x0, i.e. at
+        M^2 = Q^2 (x0/xB - 1), so that no points are spent where the integrand is
+        zero. When that leaves no range, as for every xB above about x0, the cross
+        section is zero and (0.0, 0.0) is returned without integrating.
+        """
+        if self.extrapolation == "truncated":
+            Mqq_sq_max = min(Mqq_sq_max, self.Q**2 * (self.x0 / self.xB - 1))
+            if Mqq_sq_max <= Mqq_sq_min:
+                return 0.0, 0.0
 
         # Bounded chunk-targeted batch heuristic:
         # target ~4 chunks per core, but clamp to a safe range.
